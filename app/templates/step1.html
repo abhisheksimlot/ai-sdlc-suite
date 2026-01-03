@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="rounded-2xl border border-slate-800 bg-slate-900 p-8">
+  <h2 class="text-2xl font-semibold mb-2">Transcript → Jira Stories</h2>
+  <p class="text-slate-300 mb-4">
+    Paste meeting notes or conversation text to generate Jira stories.
+  </p>
+
+  <textarea id="transcript"
+            class="w-full h-60 rounded-xl bg-slate-950 border border-slate-700 p-4 text-slate-100"
+            placeholder="Paste transcript here..."></textarea>
+
+  <div class="mt-4 flex gap-4">
+    <button id="btnGenerate"
+            class="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2 font-semibold">
+      Generate Jira
+    </button>
+    <span id="status" class="text-slate-400"></span>
+  </div>
+
+  <div id="results" class="mt-6 hidden">
+    <h3 class="text-xl font-semibold mb-2">Generated Stories</h3>
+    <pre id="output"
+         class="bg-slate-950 border border-slate-700 rounded-xl p-4 text-sm overflow-auto"></pre>
+
+    <a href="/step2"
+       class="inline-block mt-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-2 font-semibold">
+      Continue → Design Doc
+    </a>
+  </div>
+</div>
+
+<script>
+document.getElementById("btnGenerate").onclick = async () => {
+  const text = document.getElementById("transcript").value.trim();
+  if (!text) {
+    document.getElementById("status").innerText = "Please enter text.";
+    return;
+  }
+
+  document.getElementById("status").innerText = "Generating...";
+
+  const form = new FormData();
+  form.append("transcript_text", text);
+
+  const res = await fetch("/api/jira", { method: "POST", body: form });
+  const data = await res.json();
+
+  document.getElementById("status").innerText = "Done.";
+  document.getElementById("results").classList.remove("hidden");
+  document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+
+  localStorage.setItem("jira_items", JSON.stringify(data.items || []));
+};
+</script>
+{% endblock %}

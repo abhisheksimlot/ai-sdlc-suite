@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-lg">
+  <h2 class="text-3xl font-semibold mb-2">Welcome</h2>
+  <p class="text-slate-300 mb-6">
+    This app connects your AI tools end-to-end:
+    Transcript → Jira stories → Design document.
+  </p>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <a href="/step1"
+       class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
+      <h3 class="text-xl font-semibold">Step 1</h3>
+      <p class="text-slate-300 mt-2">Generate Jira stories from transcripts</p>
+    </a>
+
+    <a href="/step2"
+       class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
+      <h3 class="text-xl font-semibold">Step 2</h3>
+      <p class="text-slate-300 mt-2">Generate design document from Jira stories</p>
+    </a>
+  </div>
+</div>
+{% endblock %}

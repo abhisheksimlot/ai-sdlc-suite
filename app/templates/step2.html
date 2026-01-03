@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="rounded-2xl border border-slate-800 bg-slate-900 p-8">
+  <h2 class="text-2xl font-semibold mb-2">Jira → Design Document</h2>
+  <p class="text-slate-300 mb-4">
+    Uses Jira stories generated in Step 1.
+  </p>
+
+  <label class="block text-sm text-slate-300 mb-1">Project Name</label>
+  <input id="project"
+         class="w-full rounded-xl bg-slate-950 border border-slate-700 p-3 mb-4"
+         value="PROJECT" />
+
+  <label class="block text-sm text-slate-300 mb-1">Jira Items JSON</label>
+  <textarea id="jiraJson"
+            class="w-full h-72 rounded-xl bg-slate-950 border border-slate-700 p-4 text-sm"></textarea>
+
+  <button id="btnGenerateDoc"
+          class="mt-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2 font-semibold">
+    Generate Design Document
+  </button>
+
+  <span id="status" class="ml-4 text-slate-400"></span>
+</div>
+
+<script>
+const stored = localStorage.getItem("jira_items");
+if (stored) {
+  document.getElementById("jiraJson").value =
+    JSON.stringify(JSON.parse(stored), null, 2);
+}
+
+document.getElementById("btnGenerateDoc").onclick = async () => {
+  const items = document.getElementById("jiraJson").value;
+  const project = document.getElementById("project").value;
+
+  document.getElementById("status").innerText = "Generating...";
+
+  const form = new FormData();
+  form.append("project_name", project);
+  form.append("selected_items_json", items);
+
+  const res = await fetch("/api/design", { method: "POST", body: form });
+
+  if (!res.ok) {
+    document.getElementById("status").innerText = "Error generating document";
+    return;
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = project + "_design.docx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  document.getElementById("status").innerText = "Downloaded.";
+};
+</script>
+{% endblock %}
