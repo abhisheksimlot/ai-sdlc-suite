@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parent.parent
 import importlib.util
 
 from fastapi import FastAPI
@@ -41,8 +42,13 @@ SUITE_APP_DIR = Path(__file__).resolve().parent        # ...\ai-sdlc-suite\app
 SUITE_ROOT = SUITE_APP_DIR.parent                      # ...\ai-sdlc-suite
 PROJECTS_ROOT = SUITE_ROOT.parent                      # ...\projects
 
-USER_STORY_MAIN = PROJECTS_ROOT / "jira-user-story" / "main.py"
-DESIGN_DOC_MAIN = PROJECTS_ROOT / "jira-design-doc" / "main.py"
+#USER_STORY_MAIN = PROJECTS_ROOT / "jira-user-story" / "main.py"
+#DESIGN_DOC_MAIN = PROJECTS_ROOT / "jira-design-doc" / "main.py"
+
+USER_STORY_MAIN = REPO_ROOT / "jira-user-story" / "main.py"
+DESIGN_DOC_MAIN = REPO_ROOT / "jira-design-doc" / "main.py"
+
+
 
 # --------- Import both apps safely ----------
 user_story_app = import_fastapi_app_from_file(USER_STORY_MAIN, "jira_user_story_main_mod")
