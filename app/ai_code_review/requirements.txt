@@ -1,0 +1,6 @@
+fastapi 
+uvicorn 
+reportlab 
+openai 
+pydantic 
+ruff

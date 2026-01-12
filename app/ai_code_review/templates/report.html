@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Report • AI Code Review{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-semibold mb-6">Code Review Report</h1>
+
+<div class="mb-6 text-slate-300">
+  Language: <b>{{ report.primary_language }}</b> |
+  Files: <b>{{ report.files_scanned }}</b> |
+  Checklist: <b>{{ report.overall_checklist_status }}</b>
+</div>
+
+<h2 class="text-xl font-semibold mb-3">Findings</h2>
+
+<table class="w-full border border-slate-800 mb-8">
+  <thead class="bg-slate-800 text-sm">
+    <tr>
+      <th class="p-2">Category</th>
+      <th class="p-2">Severity</th>
+      <th class="p-2">Finding</th>
+      <th class="p-2">Location</th>
+      <th class="p-2">Remediation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for i in issues %}
+    <tr class="border-t border-slate-800">
+      <td class="p-2">{{ i.category }}</td>
+      <td class="p-2">{{ i.severity }}</td>
+      <td class="p-2">
+        <b>{{ i.title }}</b><br>{{ i.description }}
+      </td>
+      <td class="p-2">{{ i.file }} : {{ i.line }}</td>
+      <td class="p-2">{{ i.suggested_fix }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2 class="text-xl font-semibold mb-3">Final Checklist</h2>
+
+<table class="w-full border border-slate-800">
+  <thead class="bg-slate-800 text-sm">
+    <tr>
+      <th class="p-2">Category</th>
+      <th class="p-2">Check</th>
+      <th class="p-2">Status</th>
+      <th class="p-2">Evidence</th>
+      <th class="p-2">Remediation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in report.checklist %}
+    <tr class="border-t border-slate-800">
+      <td class="p-2">{{ c.category }}</td>
+      <td class="p-2">{{ c.check }}</td>
+      <td class="p-2">{{ c.status }}</td>
+      <td class="p-2">{{ c.evidence }}</td>
+      <td class="p-2">{{ c.remediation }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -5,3 +5,7 @@ openai
 python-docx
 pillow
 jinja2
+fastapi
+pydantic
+ruff
+reportlab

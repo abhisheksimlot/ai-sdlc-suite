@@ -4,22 +4,59 @@
 <div class="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-lg">
   <h2 class="text-3xl font-semibold mb-2">Welcome</h2>
   <p class="text-slate-300 mb-6">
-    This app connects your AI tools end-to-end:
-    Transcript → Jira stories → Design document.
+    Choose a tool to open.
   </p>
 
-  <div class="grid md:grid-cols-2 gap-6">
-    <a href="/step1"
+  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+    <!-- User Story -->
+    <a href="/user-story/"
        class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
-      <h3 class="text-xl font-semibold">Step 1</h3>
-      <p class="text-slate-300 mt-2">Generate Jira stories from transcripts</p>
+      <h3 class="text-xl font-semibold">User Story Generator</h3>
+      <p class="text-slate-300 mt-2">
+        Conversation / transcript → Jira stories + Word output
+      </p>
+      <div class="mt-5 inline-flex rounded-xl bg-indigo-600 px-4 py-2 font-semibold">
+        Open
+      </div>
     </a>
 
-    <a href="/step2"
+    <!-- Design Doc -->
+    <a href="/design-doc/"
        class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
-      <h3 class="text-xl font-semibold">Step 2</h3>
-      <p class="text-slate-300 mt-2">Generate design document from Jira stories</p>
+      <h3 class="text-xl font-semibold">Design Document Generator</h3>
+      <p class="text-slate-300 mt-2">
+        Jira stories → Solution Design Document (DOCX)
+      </p>
+      <div class="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2 font-semibold">
+        Open
+      </div>
     </a>
+
+    <!-- Existing Code Review Checklist -->
+    <a href="/code-review/"
+       class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
+      <h3 class="text-xl font-semibold">Code Review Checklist</h3>
+      <p class="text-slate-300 mt-2">
+        .NET / Python / Power Platform → checklist + warnings + Pass/Fail
+      </p>
+      <div class="mt-5 inline-flex rounded-xl bg-amber-600 px-4 py-2 font-semibold">
+        Open
+      </div>
+    </a>
+
+    <!-- ✅ NEW: AI Code Review -->
+    <a href="/ai-code-review/"
+       class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
+      <h3 class="text-xl font-semibold">AI Code Review</h3>
+      <p class="text-slate-300 mt-2">
+        ZIP upload → findings with file + line number + remediation + final checklist
+      </p>
+      <div class="mt-5 inline-flex rounded-xl bg-orange-600 px-4 py-2 font-semibold">
+        Open
+      </div>
+    </a>
+
   </div>
 </div>
 {% endblock %}

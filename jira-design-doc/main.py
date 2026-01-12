@@ -34,8 +34,12 @@ def render_form_page(
         </div>
         """
 
+    #text_checked = "checked" if input_mode == "text" else ""
+    #file_checked = "checked" if input_mode == "file" else ""
+
     text_checked = "checked" if input_mode == "text" else ""
     file_checked = "checked" if input_mode == "file" else ""
+    #Abhishek - Added for input mode
 
     text_display = "flex" if input_mode == "text" else "none"
     file_display = "flex" if input_mode == "file" else "none"

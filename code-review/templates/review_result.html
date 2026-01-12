@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Code Review Result</title>
+  <style>
+    :root{
+      --g:#10b981; --g2:#059669;
+      --r:#ef4444; --y:#f59e0b; --b:#3b82f6;
+      --m:#64748b; --ink:#0f172a; --line:#e5e7eb;
+      --bg:#f8fafc;
+      --shadow: 0 18px 45px rgba(2, 6, 23, 0.10);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);padding:24px;color:var(--ink);}
+    a{color:var(--g2);text-decoration:none;font-weight:800}
+    a:hover{text-decoration:underline}
+
+    .card{
+      max-width:1100px;margin:0 auto;background:#fff;border:1px solid rgba(15,23,42,.08);
+      border-radius:16px;padding:22px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+    }
+    .card::before{
+      content:"";position:absolute;left:0;top:0;bottom:0;width:6px;
+      background:linear-gradient(180deg,var(--g2),var(--g));
+    }
+
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    h1{margin:6px 0 2px;font-size:30px}
+    .muted{color:var(--m)}
+    .small{font-size:12px}
+    .spacer{height:14px}
+
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:7px 12px;border-radius:999px;color:#fff;font-weight:900;font-size:12px;
+      letter-spacing:.2px;
+    }
+    .pass{background:linear-gradient(180deg,var(--g2),var(--g))}
+    .fail{background:linear-gradient(180deg,#dc2626,var(--r))}
+    .tag{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:999px;border:1px solid var(--line);
+      background:#fff;color:var(--ink);font-weight:800;font-size:12px;
+    }
+
+    .grid{
+      display:grid;grid-template-columns: 1.3fr 1fr;
+      gap:14px;margin-top:14px;
+    }
+    @media (max-width: 900px){
+      .grid{grid-template-columns:1fr}
+      h1{font-size:26px}
+    }
+    .panel{
+      border:1px solid var(--line);border-radius:14px;padding:14px;background:#fff;
+    }
+    .panel h3{margin:0 0 10px;font-size:16px}
+    .kvs{display:grid;grid-template-columns: 140px 1fr;gap:8px 12px}
+    .kvs div{padding:4px 0}
+    .k{color:var(--m);font-weight:800}
+    .v{font-weight:700}
+
+    .sevrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .sev{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:6px 10px;border-radius:999px;border:1px solid var(--line);font-weight:900;font-size:12px;
+    }
+    .sev .dot{width:10px;height:10px;border-radius:999px;background:#cbd5e1}
+    .sev.critical .dot{background:#991b1b}
+    .sev.high .dot{background:#b45309}
+    .sev.medium .dot{background:#92400e}
+    .sev.low .dot{background:#0f766e}
+
+    .section-title{
+      margin:18px 0 8px;font-size:18px;
+      display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap
+    }
+
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+    th{background:#f9fafb;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:#475569}
+    tr:hover td{background:#fcfcfd}
+
+    .sev-Critical{color:#991b1b;font-weight:900}
+    .sev-High{color:#b45309;font-weight:900}
+    .sev-Medium{color:#92400e;font-weight:900}
+    .sev-Low{color:#0f766e;font-weight:900}
+
+    .status-pass{color:var(--g2);font-weight:900}
+    .status-fail{color:#dc2626;font-weight:900}
+    .status-na{color:#64748b;font-weight:900}
+
+    details{border:1px dashed var(--line);border-radius:12px;padding:10px;background:#fff;margin-top:8px}
+    summary{cursor:pointer;font-weight:900;color:#0f172a}
+    pre{
+      margin:10px 0 0;
+      padding:12px;border-radius:12px;background:#0b1220;color:#e5e7eb;
+      overflow:auto;font-size:12px;line-height:1.5
+    }
+
+    .catbox{
+      border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px;
+      background:linear-gradient(180deg,#ffffff 0%, #fbfffd 100%);
+    }
+    .cathead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .catname{font-size:16px;font-weight:950}
+    .count{color:var(--m);font-weight:900}
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="topbar">
+      <a href="/code-review/">← Run another review</a>
+      <span class="tag">AI SDLC Suite • Code Review</span>
+    </div>
+
+    <h1>Code Review Result</h1>
+
+    {% if error %}
+      <div style="margin-top:14px;border:1px solid #fecaca;background:#fff1f2;padding:14px;border-radius:14px">
+        <div style="color:#991b1b;font-weight:950;margin-bottom:6px">Error</div>
+        <div>{{ error }}</div>
+      </div>
+    {% else %}
+
+      <!-- Header panels -->
+      <div class="grid">
+        <div class="panel">
+          <h3>Project Details</h3>
+          <div class="kvs">
+            <div class="k">Project</div>
+            <div class="v">{{ report.project_name }}</div>
+
+            <div class="k">Prepared by</div>
+            <div class="v">{{ report.prepared_by if report.prepared_by else "—" }}</div>
+
+            <div class="k">Result</div>
+            <div class="v">
+              <span class="pill {{ 'pass' if report.overall_status == 'Pass' else 'fail' }}">
+                {{ report.overall_status }}
+              </span>
+            </div>
+          </div>
+
+          {% if report.summary %}
+            <div class="spacer"></div>
+            <div class="muted">{{ report.summary }}</div>
+          {% endif %}
+        </div>
+
+        <div class="panel">
+          <h3>Severity Overview</h3>
+
+          {% if report.severity_summary %}
+            <div class="sevrow">
+              <span class="sev critical"><span class="dot"></span>Critical: {{ report.severity_summary.Critical }}</span>
+              <span class="sev high"><span class="dot"></span>High: {{ report.severity_summary.High }}</span>
+              <span class="sev medium"><span class="dot"></span>Medium: {{ report.severity_summary.Medium }}</span>
+              <span class="sev low"><span class="dot"></span>Low: {{ report.severity_summary.Low }}</span>
+            </div>
+          {% else %}
+            <div class="muted small">No severity summary provided by the engine.</div>
+          {% endif %}
+
+          <div class="spacer"></div>
+          <div class="muted small">
+            The overall decision is based on severity + checklist outcomes.
+          </div>
+        </div>
+      </div>
+
+      <!-- Findings -->
+      <div class="section-title">
+        <div><b>Findings</b></div>
+        <div class="muted small">
+          {% if report.issues %}Total issues: <b>{{ report.issues|length }}</b>{% endif %}
+        </div>
+      </div>
+
+      {# Prefer grouped categories if present; fallback to flat issues #}
+      {% if report.categories %}
+        {% if report.categories|length == 0 %}
+          <p class="muted">No issues detected.</p>
+        {% else %}
+          {% for cat, items in report.categories.items() %}
+            <div class="catbox">
+              <div class="cathead">
+                <div class="catname">{{ cat }}</div>
+                <div class="count">{{ items|length }} item(s)</div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:110px">Severity</th>
+                    <th style="width:180px">Check</th>
+                    <th>Finding</th>
+                    <th style="width:180px">Location</th>
+                    <th>Suggested Resolution</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for i in items %}
+                    <tr>
+                      <td class="sev-{{ i.severity }}">{{ i.severity }}</td>
+                      <td>{{ i.check if i.check else (i.title if i.title else "—") }}</td>
+                      <td>
+                        <b>{{ i.title }}</b>
+                        {% if i.description %}<div class="muted">{{ i.description }}</div>{% endif %}
+
+                        {% if i.evidence %}
+                          <details>
+                            <summary>Show evidence</summary>
+                            <pre>{{ i.evidence }}</pre>
+                          </details>
+                        {% endif %}
+                      </td>
+                      <td class="muted">
+                        {% if i.file_path %}{{ i.file_path }}{% else %}—{% endif %}
+                        {% if i.line %}:{{ i.line }}{% endif %}
+                      </td>
+                      <td>{{ i.recommendation }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endfor %}
+        {% endif %}
+
+      {% else %}
+        {% if report.issues|length == 0 %}
+          <p class="muted">No issues detected.</p>
+        {% else %}
+          <table>
+            <thead>
+              <tr>
+                <th style="width:160px">Category</th>
+                <th style="width:110px">Severity</th>
+                <th>Finding</th>
+                <th style="width:180px">Location</th>
+                <th>Suggested Resolution</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in report.issues %}
+              <tr>
+                <td>{{ i.category }}</td>
+                <td class="sev-{{ i.severity }}">{{ i.severity }}</td>
+                <td>
+                  <b>{{ i.title }}</b>
+                  {% if i.description %}<div class="muted">{{ i.description }}</div>{% endif %}
+                  {% if i.evidence %}
+                    <details>
+                      <summary>Show evidence</summary>
+                      <pre>{{ i.evidence }}</pre>
+                    </details>
+                  {% endif %}
+                </td>
+                <td class="muted">
+                  {% if i.file_path %}{{ i.file_path }}{% else %}—{% endif %}
+                  {% if i.line %}:{{ i.line }}{% endif %}
+                </td>
+                <td>{{ i.recommendation }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      {% endif %}
+
+      <!-- Checklist -->
+      <div class="section-title" style="margin-top:22px">
+        <div><b>Final Code Review Checklist</b></div>
+        <div class="muted small">Outcome: <b>{{ report.overall_status }}</b></div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:180px">Category</th>
+            <th>Check</th>
+            <th style="width:90px">Status</th>
+            <th>Evidence</th>
+            <th>Remediation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in report.checklist %}
+          <tr>
+            <td>{{ c.category }}</td>
+            <td>{{ c.check }}</td>
+            <td>
+              {% if c.status == "Pass" %}
+                <span class="status-pass">Pass</span>
+              {% elif c.status == "Fail" %}
+                <span class="status-fail">Fail</span>
+              {% else %}
+                <span class="status-na">NA</span>
+              {% endif %}
+            </td>
+            <td class="muted">{{ c.evidence if c.evidence else "—" }}</td>
+            <td class="muted">{{ c.remediation if c.remediation else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="spacer"></div>
+      <div class="muted small">
+        Note: The model name and internal validation metadata are intentionally hidden from the UI.
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>

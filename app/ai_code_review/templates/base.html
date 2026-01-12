@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}AI Code Review{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-950 text-slate-100">
+  <header class="border-b border-slate-800 bg-slate-900 px-6 py-4">
+    <div class="max-w-7xl mx-auto flex justify-between">
+      <div class="font-semibold">AI Code Review</div>
+      <nav class="text-sm">
+        <a href="/" class="mr-4 hover:text-white">Home</a>
+        <a href="/ai-code-review/" class="hover:text-white">Code Review</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t border-slate-800 text-center text-xs text-slate-400 py-4">
+    AI SDLC Suite
+  </footer>
+</body>
+</html>
