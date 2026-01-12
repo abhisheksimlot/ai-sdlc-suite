@@ -6,7 +6,8 @@ from fastapi import FastAPI, Form, UploadFile, File, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from docx import Document
 
-from design_doc_logic import generate_design_doc_bytes
+from .design_doc_logic import generate_design_doc_bytes
+
 
 app = FastAPI()
 @app.get("/favicon.ico")
