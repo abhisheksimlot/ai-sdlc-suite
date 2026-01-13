@@ -172,6 +172,51 @@ def make_checklist(issues: List[Issue], languages: List[str]) -> ReviewResult:
 # Report rendering (HTML)
 # ============================================================
 def _render_report_page(report_id: str, meta: Dict[str, str], rr: ReviewResult) -> str:
+    # --- Checklist table rows ---
+    checklist_rows = ""
+    for row in (rr.checklist or []):
+        cat = html.escape(str(row.get("category", "")))
+        item = html.escape(str(row.get("item", "")))
+        result = str(row.get("result", "")).upper()
+        notes = html.escape(str(row.get("notes", "")))
+
+        badge = ""
+        if result == "PASS":
+            badge = '<span class="inline-flex rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold">PASS</span>'
+        elif result == "FAIL":
+            badge = '<span class="inline-flex rounded-full bg-rose-600 px-3 py-1 text-xs font-bold">FAIL</span>'
+        else:
+            badge = f'<span class="inline-flex rounded-full bg-slate-600 px-3 py-1 text-xs font-bold">{html.escape(result)}</span>'
+
+        checklist_rows += f"""
+        <tr class="border-t border-slate-800 align-top">
+          <td class="p-2">{cat}</td>
+          <td class="p-2">{item}</td>
+          <td class="p-2">{badge}</td>
+          <td class="p-2">{notes}</td>
+        </tr>
+        """
+
+    checklist_table = f"""
+    <h2 class="text-xl font-semibold mt-8 mb-2">Code Review Checklist</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border border-slate-800">
+        <thead class="bg-slate-800">
+          <tr>
+            <th class="p-2 text-left">Category</th>
+            <th class="p-2 text-left">Checklist item</th>
+            <th class="p-2 text-left">Result</th>
+            <th class="p-2 text-left">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {checklist_rows if checklist_rows else '<tr><td colspan="4" class="p-4">No checklist generated</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    """
+
+    # --- Findings rows ---
     rows = ""
     for i in sorted(
         rr.issues,
@@ -207,7 +252,9 @@ def _render_report_page(report_id: str, meta: Dict[str, str], rr: ReviewResult) 
   <div><b>Overall:</b> {rr.overall}</div>
 </div>
 
-<h2 class="text-xl font-semibold mb-2">Findings</h2>
+{checklist_table}
+
+<h2 class="text-xl font-semibold mt-8 mb-2">Findings</h2>
 
 <div class="overflow-x-auto">
 <table class="w-full text-sm border border-slate-800">
@@ -235,6 +282,7 @@ def _render_report_page(report_id: str, meta: Dict[str, str], rr: ReviewResult) 
 </body>
 </html>
 """
+
 
 
 # ============================================================
