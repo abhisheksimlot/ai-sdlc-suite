@@ -1,17 +1,181 @@
 {% extends "base.html" %}
-{% block title %}Upload • AI Code Review{% endblock %}
-
 {% block content %}
-<div class="bg-slate-900 border border-slate-800 rounded-2xl p-8">
-  <h1 class="text-3xl font-semibold mb-4">Upload Project ZIP</h1>
 
-  <form action="/ai-code-review/review" method="post" enctype="multipart/form-data">
-    <input type="file" name="zip_file" required
-      class="block w-full text-sm text-slate-300 mb-4" />
+<div class="mx-auto max-w-5xl px-6 py-10">
+  <div class="rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
+    <div class="p-8">
+      <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">AI Code Review</h1>
+      <p class="mt-2 text-slate-600">
+        Upload a project ZIP or provide a repository to generate findings, remediation, and a pass/fail checklist.
+      </p>
 
-    <button class="bg-orange-600 hover:bg-orange-500 px-6 py-3 rounded-xl font-semibold">
-      Run AI Code Review
-    </button>
-  </form>
+      <div class="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-50 text-amber-800 px-4 py-2 border border-amber-200 text-sm">
+        <span class="inline-block h-2 w-2 rounded-full bg-amber-500"></span>
+        Python • Power Platform (Canvas + Model-Driven) • Fully in-memory
+      </div>
+
+      {% if error %}
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+        <div class="font-semibold">Error</div>
+        <div class="mt-1 text-sm">{{ error }}</div>
+      </div>
+      {% endif %}
+
+      <form class="mt-8 space-y-8" action="/ai-code-review/review" method="post" enctype="multipart/form-data">
+        <!-- Source selector -->
+        <div>
+          <label class="block text-sm font-semibold text-slate-900">Source</label>
+          <p class="mt-1 text-sm text-slate-500">Choose how you want to provide the code.</p>
+
+          <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="cursor-pointer rounded-xl border border-slate-200 p-4 hover:border-amber-300 transition bg-white">
+              <div class="flex items-start gap-3">
+                <input id="srcZip" type="radio" name="source_type" value="zip"
+                       class="mt-1 h-4 w-4 text-amber-600" checked>
+                <div>
+                  <div class="font-semibold text-slate-900">Project ZIP</div>
+                  <div class="text-sm text-slate-500">Upload a zipped repo/folder</div>
+                </div>
+              </div>
+            </label>
+
+            <label class="cursor-pointer rounded-xl border border-slate-200 p-4 hover:border-amber-300 transition bg-white">
+              <div class="flex items-start gap-3">
+                <input id="srcRepo" type="radio" name="source_type" value="repo"
+                       class="mt-1 h-4 w-4 text-amber-600">
+                <div>
+                  <div class="font-semibold text-slate-900">Repository</div>
+                  <div class="text-sm text-slate-500">Fetch from Git / Azure DevOps</div>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- ZIP block -->
+        <div id="zipBlock" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-sm font-semibold text-slate-900">Project ZIP</label>
+            <span class="text-sm text-slate-500">Upload a zipped repo/folder</span>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 p-4 bg-white">
+            <input type="file" name="zip_file" accept=".zip"
+                   class="block w-full text-sm text-slate-900
+                          file:mr-4 file:rounded-lg file:border-0
+                          file:bg-amber-500 file:px-4 file:py-2 file:text-white
+                          hover:file:bg-amber-600">
+            <p class="mt-2 text-xs text-slate-500">Max size is controlled by server configuration.</p>
+          </div>
+        </div>
+
+        <!-- Repo block -->
+        <div id="repoBlock" class="hidden space-y-4">
+          <div class="rounded-xl border border-slate-200 p-4 bg-white">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-900">Repository Type</label>
+                <select name="repo_type"
+                        class="mt-2 w-full rounded-xl border border-slate-300 bg-white
+                               px-4 py-3 text-sm text-slate-900
+                               focus:outline-none focus:ring-2 focus:ring-amber-200">
+                  <option value="">Select…</option>
+                  <option value="git">GIT</option>
+                  <option value="azure_devops">Azure DevOps</option>
+                </select>
+                <p class="mt-1 text-xs text-slate-500">Choose where the repo is hosted.</p>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-sm font-semibold text-slate-900">Repo Path</label>
+                <input name="repo_path" type="text"
+                       placeholder="e.g., https://... or org/project/_git/repo"
+                       class="mt-2 w-full rounded-xl border border-slate-300 bg-white
+                              px-4 py-3 text-sm text-slate-900
+                              placeholder:text-slate-400
+                              focus:outline-none focus:ring-2 focus:ring-amber-200">
+                <p class="mt-1 text-xs text-slate-500">Authentication happens in backend code.</p>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-900">Branch</label>
+                <input name="branch_name" type="text" placeholder="e.g., main"
+                       class="mt-2 w-full rounded-xl border border-slate-300 bg-white
+                              px-4 py-3 text-sm text-slate-900
+                              placeholder:text-slate-400
+                              focus:outline-none focus:ring-2 focus:ring-amber-200">
+                <p class="mt-1 text-xs text-slate-500">Must exist in the repo.</p>
+              </div>
+
+              <div class="md:col-span-2">
+                <div class="rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-700">
+                  <div class="font-semibold text-slate-900">Note</div>
+                  <div class="mt-1">
+                    If the repo path is missing/invalid or the branch name is missing/invalid, the system will show an error.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Meta fields -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-semibold text-slate-900">Project Name</label>
+            <p class="mt-1 text-sm text-slate-500">Auto-filled from ZIP filename or repo name in report</p>
+            <input name="project_name" type="text" value="(Auto)" readonly
+                   class="mt-2 w-full rounded-xl border border-slate-300
+                          bg-slate-50 text-slate-900
+                          px-4 py-3 text-sm">
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-slate-900">Prepared By</label>
+            <p class="mt-1 text-sm text-slate-500">Shown on the report</p>
+            <input name="prepared_by" type="text" value="Automation Factory" readonly
+                   class="mt-2 w-full rounded-xl border border-slate-300
+                          bg-slate-50 text-slate-900
+                          px-4 py-3 text-sm">
+          </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <p class="text-sm text-slate-600 max-w-2xl">
+            The report includes categorized issues, severity, location (file + line), suggested remediation,
+            and a final checklist with overall pass/fail.
+          </p>
+
+          <button type="submit"
+                  class="inline-flex items-center justify-center rounded-full bg-amber-500 px-10 py-4 text-white font-semibold shadow-lg hover:bg-amber-600 transition">
+            Generate Report
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
+
+<script>
+  (function () {
+    const zipRadio = document.getElementById("srcZip");
+    const repoRadio = document.getElementById("srcRepo");
+    const zipBlock = document.getElementById("zipBlock");
+    const repoBlock = document.getElementById("repoBlock");
+
+    function toggle() {
+      const isRepo = repoRadio.checked;
+      zipBlock.classList.toggle("hidden", isRepo);
+      repoBlock.classList.toggle("hidden", !isRepo);
+    }
+
+    zipRadio.addEventListener("change", toggle);
+    repoRadio.addEventListener("change", toggle);
+    toggle();
+  })();
+</script>
+
 {% endblock %}
