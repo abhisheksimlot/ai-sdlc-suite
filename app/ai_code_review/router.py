@@ -9,7 +9,6 @@ import base64
 import urllib.parse
 import urllib.request
 import urllib.error
-import dataclasses
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -51,7 +50,7 @@ canvas_msapp_reviewer = CanvasMsappReviewer()
 # ============================================================
 REPORT_TTL_SECONDS = 30 * 60
 REPORT_CACHE: Dict[str, Dict[str, Any]] = {}
-MAX_ZIP_MB_UPLOAD = int(os.getenv("MAX_ZIP_MB_UPLOAD", "500"))
+MAX_ZIP_MB_UPLOAD = int(os.getenv("MAX_ZIP_MB_UPLOAD", "35"))
 
 
 def _cleanup_cache() -> None:
@@ -65,25 +64,24 @@ def _cleanup_cache() -> None:
 # IMPORTANT: Normalize repo ZIP structure to match uploaded ZIP
 # Supports both:
 #   - dict[path -> bytes]
-#   - list[dict/object-like] where each item has (path/name/filename)
+#   - list[dataclass/dict-like] entries (including frozen dataclasses)
 # ============================================================
 def normalize_zip_entries(entries):
     """
     Normalize ZIP entry paths so repo downloads (often wrapped in a single root folder)
     behave the same as uploaded ZIPs.
 
-    Works with:
-      - dict[path -> bytes]
-      - list of dataclass entries (even frozen dataclasses)
+    Strips the common single top-level folder if ALL entries share it:
+      repo-main/app/main.py -> app/main.py
 
-    Does NOT mutate entries. Rebuilds new entries safely.
+    Does NOT mutate frozen dataclasses; rebuilds safely.
     """
     if not entries:
         return entries
 
-    # =====================================================
-    # CASE 1: dict[path -> bytes]
-    # =====================================================
+    # ----------------------------
+    # Case A: dict[path -> bytes]
+    # ----------------------------
     if isinstance(entries, dict):
         top_levels = set()
         for path in entries.keys():
@@ -103,9 +101,9 @@ def normalize_zip_entries(entries):
 
         return entries
 
-    # =====================================================
-    # CASE 2: list of (frozen) dataclass entries
-    # =====================================================
+    # ----------------------------
+    # Case B: list of (possibly frozen) dataclass entries
+    # ----------------------------
     if isinstance(entries, list):
 
         def get_path(item) -> str:
@@ -116,7 +114,6 @@ def normalize_zip_entries(entries):
                 or ""
             )
 
-        # find common root folder
         roots = set()
         for e in entries:
             p = get_path(e)
@@ -131,29 +128,22 @@ def normalize_zip_entries(entries):
 
         for e in entries:
             old_path = get_path(e)
-            if old_path.startswith(root + "/"):
-                new_path = old_path[len(root) + 1 :]
-            else:
-                new_path = old_path
+            new_path = old_path[len(root) + 1 :] if old_path.startswith(root + "/") else old_path
 
-            # Rebuild frozen dataclass safely using its actual fields
+            # dataclass: rebuild with same fields
             if hasattr(e, "__dataclass_fields__"):
                 field_names = list(e.__dataclass_fields__.keys())
                 kwargs = {f: getattr(e, f) for f in field_names}
 
-                # Update whichever field holds the path
+                # update whichever field represents the path
                 for pf in ("path", "name", "filename"):
                     if pf in kwargs:
                         kwargs[pf] = new_path
                         break
-                else:
-                    # If there is no obvious path field, leave it unchanged
-                    normalized_entries.append(e)
-                    continue
 
                 normalized_entries.append(type(e)(**kwargs))
             else:
-                # unknown object type, keep as-is
+                # unknown type - keep as-is
                 normalized_entries.append(e)
 
         return normalized_entries
@@ -498,7 +488,6 @@ async def review(
             status_code=400,
         )
 
-    # Read ZIP and normalize paths so repo == upload
     entries = read_zip_in_memory(zip_bytes)
     entries = normalize_zip_entries(entries)
 
@@ -593,7 +582,8 @@ def report_html(request: Request, report_id: str):
     )
 
 
-@router.get("/report/{report_id}.pdf")
+# ✅ FIXED PDF ROUTE (no ".pdf" suffix)
+@router.get("/report/{report_id}/pdf")
 def report_pdf(report_id: str):
     _cleanup_cache()
     item = REPORT_CACHE.get(report_id)

@@ -43,6 +43,7 @@ class PythonRuffReviewer(Reviewer):
                 continue
 
             cmd = ["ruff", "check", "--output-format=json", "--stdin-filename", path, "-"]
+            #cmd = ["python", "-m", "ruff", "check","--select", "E,F,W,I,B,UP,S,ASYNC,C4,ARG,PL,PERF,RUF", "--line-length", "120","--output-format", "json",path,"-"]
             proc = subprocess.run(
                 cmd,
                 input=content.encode("utf-8", errors="replace"),

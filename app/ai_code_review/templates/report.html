@@ -1,64 +1,225 @@
+{# app/ai_code_review/templates/report.html #}
 {% extends "base.html" %}
-{% block title %}Report • AI Code Review{% endblock %}
 
 {% block content %}
-<h1 class="text-3xl font-semibold mb-6">Code Review Report</h1>
+<div class="mx-auto max-w-6xl px-4 py-10">
 
-<div class="mb-6 text-slate-300">
-  Language: <b>{{ report.primary_language }}</b> |
-  Files: <b>{{ report.files_scanned }}</b> |
-  Checklist: <b>{{ report.overall_checklist_status }}</b>
+  <!-- Header -->
+  <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div>
+      <h1 class="text-3xl font-semibold text-slate-100">Code Review Report</h1>
+      <p class="mt-1 text-sm text-slate-300">
+        Generated for <span class="font-medium text-slate-200">{{ meta.project_name }}</span>
+        {% if meta.source_type == "repo" %}
+          <span class="text-slate-400">•</span>
+          <span class="text-slate-300">Repo</span>
+        {% else %}
+          <span class="text-slate-400">•</span>
+          <span class="text-slate-300">ZIP Upload</span>
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <a href="/ai-code-review/report/{{ report_id }}/pdf"
+         class="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600">
+        Download PDF
+      </a>
+      <a href="/ai-code-review/"
+         class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800">
+        New Review
+      </a>
+    </div>
+  </div>
+
+  <!-- Meta cards -->
+  <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow">
+      <div class="text-xs uppercase tracking-wide text-slate-400">Prepared By</div>
+      <div class="mt-1 text-lg font-semibold text-slate-100">{{ meta.prepared_by }}</div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow">
+      <div class="text-xs uppercase tracking-wide text-slate-400">Languages</div>
+      <div class="mt-1 text-lg font-semibold text-slate-100">{{ meta.languages }}</div>
+      <div class="mt-1 text-xs text-slate-400">
+        Files scanned (text): {{ report.files_scanned }}
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow">
+      <div class="text-xs uppercase tracking-wide text-slate-400">Overall Checklist</div>
+      <div class="mt-1">
+        {% if report.overall_checklist_status == "PASS" %}
+          <span class="inline-flex items-center rounded-full bg-emerald-600/20 px-3 py-1 text-sm font-semibold text-emerald-300">
+            PASS
+          </span>
+        {% else %}
+          <span class="inline-flex items-center rounded-full bg-rose-600/20 px-3 py-1 text-sm font-semibold text-rose-300">
+            FAIL
+          </span>
+        {% endif %}
+      </div>
+      <div class="mt-2 text-xs text-slate-400">
+        Report ID: {{ report_id }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Repo details (if repo) -->
+  {% if meta.source_type == "repo" %}
+  <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow">
+    <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">Repository</div>
+        <div class="mt-1 text-sm font-medium text-slate-100 break-all">{{ meta.repo_path }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">Branch</div>
+        <div class="mt-1 text-sm font-medium text-slate-100">{{ meta.branch_name }}</div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">Repo Type</div>
+        <div class="mt-1 text-sm font-medium text-slate-100">{{ meta.repo_type }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Issues -->
+  <div class="mt-8 rounded-2xl border border-slate-800 bg-slate-900 shadow">
+    <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-100">Findings</h2>
+      <div class="text-sm text-slate-400">
+        Total issues: <span class="font-semibold text-slate-200">{{ issues|length }}</span>
+      </div>
+    </div>
+
+    {% if issues|length == 0 %}
+      <div class="px-6 py-8 text-slate-300">
+        No issues found 🎉
+      </div>
+    {% else %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-left text-sm">
+          <thead class="bg-slate-950/40 text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th class="px-6 py-3">Category</th>
+              <th class="px-6 py-3">Severity</th>
+              <th class="px-6 py-3">Title</th>
+              <th class="px-6 py-3">Location</th>
+              <th class="px-6 py-3">Remediation</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800">
+            {% for it in issues %}
+            <tr class="align-top">
+              <td class="px-6 py-4 text-slate-200">{{ it.category }}</td>
+              <td class="px-6 py-4">
+                {% set sev = (it.severity or '')|upper %}
+                {% if sev in ['CRITICAL','HIGH'] %}
+                  <span class="inline-flex rounded-full bg-rose-600/20 px-2.5 py-1 text-xs font-semibold text-rose-300">{{ sev }}</span>
+                {% elif sev in ['MEDIUM'] %}
+                  <span class="inline-flex rounded-full bg-amber-600/20 px-2.5 py-1 text-xs font-semibold text-amber-300">{{ sev }}</span>
+                {% else %}
+                  <span class="inline-flex rounded-full bg-slate-700/40 px-2.5 py-1 text-xs font-semibold text-slate-200">{{ sev or 'LOW' }}</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-slate-100 font-medium">
+                {{ it.title }}
+                {% if it.description %}
+                  <div class="mt-1 text-xs text-slate-300 whitespace-pre-wrap">{{ it.description }}</div>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-slate-300">
+                {% if it.file %}
+                  <div class="font-mono text-xs text-slate-200 break-all">{{ it.file }}</div>
+                  {% if it.line %}
+                    <div class="mt-1 text-xs text-slate-400">Line: {{ it.line }}</div>
+                  {% endif %}
+                {% else %}
+                  <span class="text-slate-500">—</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-slate-300">
+                {% if it.suggested_fix %}
+                  <div class="whitespace-pre-wrap text-sm text-slate-200">{{ it.suggested_fix }}</div>
+                {% else %}
+                  <span class="text-slate-500">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Final Checklist -->
+  <div class="mt-8 rounded-2xl border border-slate-800 bg-slate-900 shadow">
+    <div class="border-b border-slate-800 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-100">Final Checklist</h2>
+      <p class="mt-1 text-sm text-slate-400">Pass/Fail summary by category.</p>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-950/40 text-xs uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-6 py-3">Category</th>
+            <th class="px-6 py-3">Check</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">Evidence</th>
+            <th class="px-6 py-3">Remediation</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          {% for row in report.checklist %}
+          <tr>
+            <td class="px-6 py-4 text-slate-200">{{ row.category }}</td>
+            <td class="px-6 py-4 text-slate-100 font-medium">{{ row.check }}</td>
+            <td class="px-6 py-4">
+              {% if row.status == "PASS" %}
+                <span class="inline-flex rounded-full bg-emerald-600/20 px-2.5 py-1 text-xs font-semibold text-emerald-300">PASS</span>
+              {% else %}
+                <span class="inline-flex rounded-full bg-rose-600/20 px-2.5 py-1 text-xs font-semibold text-rose-300">FAIL</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-slate-300">{{ row.evidence or "" }}</td>
+            <td class="px-6 py-4 text-slate-300">{{ row.remediation or "" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DEBUG (ZIP vs Repo differences) -->
+  <div class="mt-8 rounded-2xl border border-slate-800 bg-slate-900 shadow">
+    <div class="border-b border-slate-800 px-6 py-4">
+      <h2 class="text-lg font-semibold text-slate-100">Debug</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        Use this to compare ZIP vs Repo runs (file count + top file paths after filtering).
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 px-6 py-5 md:grid-cols-2">
+      <div class="text-sm text-slate-300 space-y-1">
+        <div><span class="text-slate-400">Source:</span> {{ meta.source_type }}</div>
+        {% if meta.source_type == "repo" %}
+          <div><span class="text-slate-400">Repo:</span> <span class="break-all">{{ meta.repo_path }}</span></div>
+          <div><span class="text-slate-400">Branch:</span> {{ meta.branch_name }}</div>
+        {% endif %}
+        <div><span class="text-slate-400">Files after filter:</span> {{ meta.debug_file_count_after_filter }}</div>
+      </div>
+
+      <div>
+        <div class="text-xs uppercase tracking-wide text-slate-400">Top files (first 20)</div>
+        <pre class="mt-2 max-h-64 overflow-auto rounded-xl bg-slate-950/50 p-4 text-xs text-slate-200 whitespace-pre-wrap">{{ meta.debug_top_20_files }}</pre>
+      </div>
+    </div>
+  </div>
+
 </div>
-
-<h2 class="text-xl font-semibold mb-3">Findings</h2>
-
-<table class="w-full border border-slate-800 mb-8">
-  <thead class="bg-slate-800 text-sm">
-    <tr>
-      <th class="p-2">Category</th>
-      <th class="p-2">Severity</th>
-      <th class="p-2">Finding</th>
-      <th class="p-2">Location</th>
-      <th class="p-2">Remediation</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for i in issues %}
-    <tr class="border-t border-slate-800">
-      <td class="p-2">{{ i.category }}</td>
-      <td class="p-2">{{ i.severity }}</td>
-      <td class="p-2">
-        <b>{{ i.title }}</b><br>{{ i.description }}
-      </td>
-      <td class="p-2">{{ i.file }} : {{ i.line }}</td>
-      <td class="p-2">{{ i.suggested_fix }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-<h2 class="text-xl font-semibold mb-3">Final Checklist</h2>
-
-<table class="w-full border border-slate-800">
-  <thead class="bg-slate-800 text-sm">
-    <tr>
-      <th class="p-2">Category</th>
-      <th class="p-2">Check</th>
-      <th class="p-2">Status</th>
-      <th class="p-2">Evidence</th>
-      <th class="p-2">Remediation</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for c in report.checklist %}
-    <tr class="border-t border-slate-800">
-      <td class="p-2">{{ c.category }}</td>
-      <td class="p-2">{{ c.check }}</td>
-      <td class="p-2">{{ c.status }}</td>
-      <td class="p-2">{{ c.evidence }}</td>
-      <td class="p-2">{{ c.remediation }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}
