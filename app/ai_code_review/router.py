@@ -1,444 +1,144 @@
-# app/ai_code_review/router.py
 from __future__ import annotations
 
 import os
-import re
 import time
 import uuid
-import base64
-import urllib.parse
 import urllib.request
+import urllib.parse
 import urllib.error
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-from .render import render
-from .utils.zip_reader import read_zip_in_memory, as_text_files, extract_binary
-from .utils.language_detect import detect_languages
-from .utils.content_filter import filter_files_for_review
+# ReportLab (PDF tables)
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 
-from .reviewers.base import Issue, ReviewResult
-from .reviewers.python_ruff import PythonRuffReviewer
-from .reviewers.llm_fallback import LLMFallbackReviewer
-from .reviewers.power_platform import PowerPlatformReviewer
-from .reviewers.canvas_msapp import CanvasMsappReviewer
-from .reviewers.model_driven_app import ModelDrivenAppReviewer
+from app.ai_code_review.render import render
+from app.ai_code_review.reviewers.base import Issue, ReviewResult
+from app.ai_code_review.reviewers.python_ruff import PythonRuffReviewer
+from app.ai_code_review.reviewers.power_platform import PowerPlatformReviewer
+from app.ai_code_review.reviewers.model_driven_app import ModelDrivenAppReviewer
+from app.ai_code_review.reviewers.canvas_msapp import CanvasMsappReviewer
+from app.ai_code_review.reviewers.llm_fallback import LLMFallbackReviewer
 
-from .reporting.pdf_report import build_pdf_report
+from app.ai_code_review.utils.zip_reader import (
+    read_zip_in_memory,
+    normalize_zip_entries,
+    as_text_files,
+    extract_binary,
+)
+from app.ai_code_review.utils.language_detect import detect_languages
+from app.ai_code_review.utils.content_filter import filter_files_for_review
 
 
-# ============================================================
-# Router (NO prefix – mounted by suite at /ai-code-review)
-# ============================================================
+# ✅ IMPORTANT: NO prefix here (your app.main likely sets the prefix already)
 router = APIRouter(tags=["AI Code Review"])
 
-
-# ============================================================
-# Reviewers
-# ============================================================
 python_reviewer = PythonRuffReviewer()
-llm_reviewer = LLMFallbackReviewer(model=os.getenv("REVIEW_MODEL", "gpt-4.1-mini"))
 powerplatform_reviewer = PowerPlatformReviewer()
 model_driven_reviewer = ModelDrivenAppReviewer()
 canvas_msapp_reviewer = CanvasMsappReviewer()
+llm_reviewer = LLMFallbackReviewer()
 
-
-# ============================================================
-# Cache & limits
-# ============================================================
-REPORT_TTL_SECONDS = 30 * 60
 REPORT_CACHE: Dict[str, Dict[str, Any]] = {}
-MAX_ZIP_MB_UPLOAD = int(os.getenv("MAX_ZIP_MB_UPLOAD", "35"))
+REPORT_TTL_SECONDS = 30 * 60
+MAX_ZIP_MB_UPLOAD = int(os.getenv("MAX_ZIP_MB_UPLOAD", "500"))
 
 
 def _cleanup_cache() -> None:
     now = time.time()
     for k in list(REPORT_CACHE.keys()):
-        if now - REPORT_CACHE[k]["created"] > REPORT_TTL_SECONDS:
+        created = REPORT_CACHE[k].get("created", 0)
+        if now - created > REPORT_TTL_SECONDS:
             REPORT_CACHE.pop(k, None)
 
 
-# ============================================================
-# IMPORTANT: Normalize repo ZIP structure to match uploaded ZIP
-# Supports both:
-#   - dict[path -> bytes]
-#   - list[dataclass/dict-like] entries (including frozen dataclasses)
-# ============================================================
-def normalize_zip_entries(entries):
-    """
-    Normalize ZIP entry paths so repo downloads (often wrapped in a single root folder)
-    behave the same as uploaded ZIPs.
+def _download_github_zip(repo_url: str, branch: str) -> bytes:
+    repo_url = (repo_url or "").strip().rstrip("/")
+    if not repo_url.startswith("https://github.com/"):
+        raise HTTPException(status_code=400, detail="Only public GitHub repos supported in this build.")
 
-    Strips the common single top-level folder if ALL entries share it:
-      repo-main/app/main.py -> app/main.py
+    parts = repo_url.replace("https://github.com/", "").split("/")
+    if len(parts) < 2:
+        raise HTTPException(status_code=400, detail="Invalid GitHub repo URL.")
 
-    Does NOT mutate frozen dataclasses; rebuilds safely.
-    """
-    if not entries:
-        return entries
+    org, repo = parts[0], parts[1]
+    branch = (branch or "main").strip() or "main"
+    url = f"https://github.com/{org}/{repo}/archive/refs/heads/{urllib.parse.quote(branch)}.zip"
 
-    # ----------------------------
-    # Case A: dict[path -> bytes]
-    # ----------------------------
-    if isinstance(entries, dict):
-        top_levels = set()
-        for path in entries.keys():
-            parts = path.split("/", 1)
-            if len(parts) == 2:
-                top_levels.add(parts[0])
-
-        if len(top_levels) == 1:
-            root = next(iter(top_levels))
-            normalized = {}
-            for path, data in entries.items():
-                if path.startswith(root + "/"):
-                    normalized[path[len(root) + 1 :]] = data
-                else:
-                    normalized[path] = data
-            return normalized
-
-        return entries
-
-    # ----------------------------
-    # Case B: list of (possibly frozen) dataclass entries
-    # ----------------------------
-    if isinstance(entries, list):
-
-        def get_path(item) -> str:
-            return (
-                getattr(item, "path", None)
-                or getattr(item, "name", None)
-                or getattr(item, "filename", None)
-                or ""
-            )
-
-        roots = set()
-        for e in entries:
-            p = get_path(e)
-            if p and "/" in p:
-                roots.add(p.split("/", 1)[0])
-
-        if len(roots) != 1:
-            return entries
-
-        root = next(iter(roots))
-        normalized_entries = []
-
-        for e in entries:
-            old_path = get_path(e)
-            new_path = old_path[len(root) + 1 :] if old_path.startswith(root + "/") else old_path
-
-            # dataclass: rebuild with same fields
-            if hasattr(e, "__dataclass_fields__"):
-                field_names = list(e.__dataclass_fields__.keys())
-                kwargs = {f: getattr(e, f) for f in field_names}
-
-                # update whichever field represents the path
-                for pf in ("path", "name", "filename"):
-                    if pf in kwargs:
-                        kwargs[pf] = new_path
-                        break
-
-                normalized_entries.append(type(e)(**kwargs))
-            else:
-                # unknown type - keep as-is
-                normalized_entries.append(e)
-
-        return normalized_entries
-
-    return entries
-
-
-# ============================================================
-# User-friendly errors
-# ============================================================
-class UserFacingRepoError(ValueError):
-    """Errors safe to show directly to users."""
-
-
-# ============================================================
-# HTTP helper
-# ============================================================
-def _http_get_bytes(url: str, headers: Dict[str, str]) -> bytes:
-    req = urllib.request.Request(url, headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = resp.read()
-            if not data:
-                raise UserFacingRepoError(
-                    "Repository download succeeded but returned no files. Please verify the repository and branch."
-                )
-            return data
-
+        req = urllib.request.Request(url, headers={"User-Agent": "ai-sdlc-suite"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.read()
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            raise UserFacingRepoError(
-                "Access denied while downloading the repository. "
-                "If this is a public repo, please re-check the URL; if it's private, credentials are required."
-            )
-        if e.code == 404:
-            raise UserFacingRepoError(
-                "Repository or branch not found. Please verify the repo path and branch name."
-            )
-        raise UserFacingRepoError(f"Repository download failed (HTTP {e.code}). Please try again.")
-
-    except urllib.error.URLError:
-        raise UserFacingRepoError(
-            "Network error while accessing the repository. Please check your internet/VPN and try again."
-        )
+        raise HTTPException(status_code=400, detail=f"Failed to download repo ZIP (HTTP {e.code}).")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to download repo ZIP: {e}")
 
 
-# ============================================================
-# Azure DevOps helpers (Public-friendly: PAT optional)
-# ============================================================
-def _parse_azure_devops_repo(repo_path: str) -> Dict[str, str]:
-    p = repo_path.strip()
-    if not p.startswith("http"):
-        p = "https://dev.azure.com/" + p.strip("/")
-
-    m1 = re.match(r"^https://dev\.azure\.com/([^/]+)/([^/]+)/_git/([^/?#]+)", p, re.IGNORECASE)
-    if m1:
-        return {"org": m1.group(1), "project": m1.group(2), "repo": m1.group(3)}
-
-    m2 = re.match(r"^https://([^/.]+)\.visualstudio\.com/([^/]+)/_git/([^/?#]+)", p, re.IGNORECASE)
-    if m2:
-        return {"org": m2.group(1), "project": m2.group(2), "repo": m2.group(3)}
-
-    raise UserFacingRepoError(
-        "Azure DevOps repo path format not recognised. Use: https://dev.azure.com/{org}/{project}/_git/{repo}"
-    )
-
-
-def _azure_devops_headers() -> Dict[str, str]:
-    headers = {"Accept": "application/zip", "User-Agent": "AI-SDLC-Suite"}
-    pat = os.getenv("ADO_PAT", "").strip()
-    if pat:
-        token = base64.b64encode(f":{pat}".encode()).decode()
-        headers["Authorization"] = f"Basic {token}"
-    return headers
-
-
-def _azure_devops_zip_url(org: str, project: str, repo: str, branch: str) -> str:
-    b = branch.strip()
-    if b.lower().startswith("refs/heads/"):
-        b = b.split("/", 2)[-1]
-
-    return (
-        f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}/items"
-        f"?scopePath=/"
-        f"&recursionLevel=Full"
-        f"&versionDescriptor.version={urllib.parse.quote(b)}"
-        f"&versionDescriptor.versionType=branch"
-        f"&includeContent=true"
-        f"&$format=zip"
-        f"&api-version=7.0"
-    )
-
-
-# ============================================================
-# GitHub helpers (Public-friendly: token optional)
-# ============================================================
-def _parse_github_repo(repo_path: str) -> Dict[str, str]:
-    p = repo_path.strip()
-
-    if p.startswith("http"):
-        m = re.match(r"^https://github\.com/([^/]+)/([^/?#]+)", p, re.IGNORECASE)
-        if not m:
-            raise UserFacingRepoError("GitHub repo path format not recognised. Use https://github.com/{owner}/{repo}")
-        owner, repo = m.group(1), m.group(2)
-    else:
-        parts = p.strip("/").split("/")
-        if len(parts) != 2:
-            raise UserFacingRepoError("GitHub repo path format not recognised. Use owner/repo")
-        owner, repo = parts[0], parts[1]
-
-    return {"owner": owner, "repo": repo.replace(".git", "")}
-
-
-def _github_headers() -> Dict[str, str]:
-    headers = {"Accept": "application/zip", "User-Agent": "AI-SDLC-Suite"}
-    token = os.getenv("GITHUB_TOKEN", "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
-
-
-def _github_zip_url(owner: str, repo: str, branch: str) -> str:
-    b = branch.strip()
-    if b.lower().startswith("refs/heads/"):
-        b = b.split("/", 2)[-1]
-    return f"https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{urllib.parse.quote(b)}"
-
-
-# ============================================================
-# Repo fetch (supports Public repos; tokens optional)
-# ============================================================
-async def fetch_repo_as_zip_bytes(repo_type: str, repo_path: str, branch_name: str) -> bytes:
-    repo_type = (repo_type or "").strip().lower()
-    repo_path = (repo_path or "").strip()
-    branch_name = (branch_name or "").strip()
-
-    if repo_type not in ("azure_devops", "git"):
-        raise UserFacingRepoError("Please select repository type: GIT or Azure DevOps.")
-    if not repo_path:
-        raise UserFacingRepoError("Repository path is required.")
-    if not branch_name:
-        raise UserFacingRepoError("Branch name is required.")
-
-    if repo_type == "azure_devops":
-        ado = _parse_azure_devops_repo(repo_path)
-        url = _azure_devops_zip_url(ado["org"], ado["project"], ado["repo"], branch_name)
-        return _http_get_bytes(url, _azure_devops_headers())
-
-    gh = _parse_github_repo(repo_path)
-    url = _github_zip_url(gh["owner"], gh["repo"], branch_name)
-    return _http_get_bytes(url, _github_headers())
-
-
-# ============================================================
-# Checklist helpers
-# ============================================================
-def _normalize_severity(sev: str) -> str:
-    s = (sev or "").upper()
-    return s if s in ("LOW", "MEDIUM", "HIGH", "CRITICAL") else "MEDIUM"
-
-
-def _bucket_for_issue(issue: Issue, languages: List[str]) -> str:
-    is_pp = "powerplatform" in (languages or [])
-    rid = (getattr(issue, "rule_id", "") or "").upper()
-    cat = (issue.category or "").strip().lower()
-    title = (issue.title or "").strip().lower()
-    detail = (issue.detail or "").strip().lower()
-
-    if is_pp:
-        if rid.startswith(("PP-", "MSAPP-")):
-            return "ALM & Governance"
-        if rid.startswith("MDA-"):
-            return "Model-driven UX"
-        if cat == "security" or ("secret" in title) or ("secret" in detail) or ("token" in detail):
-            return "Security"
-        if cat in ("reliability", "availability"):
-            return "Reliability"
-        if cat == "performance" or ("delegation" in title) or ("delegation" in detail):
-            return "Performance"
-        if cat in ("maintainability", "governance", "alm"):
-            return "Maintainability"
-        return "Maintainability"
-
-    if cat == "security":
-        return "Security"
-    if cat in ("reliability", "availability"):
-        return "Reliability"
-    if cat == "performance":
-        return "Performance"
-    if cat == "maintainability":
-        return "Maintainability"
-    if ("style" in cat) or ("format" in cat) or ("lint" in cat):
-        return "Style"
-    return "Maintainability"
-
-
-def make_checklist(issues: List[Issue], languages: List[str]) -> List[Dict[str, str]]:
-    is_pp = "powerplatform" in (languages or [])
-
-    bucket_counts: Dict[str, int] = {}
-    bucket_high_crit: Dict[str, bool] = {}
-
-    for it in issues:
-        b = _bucket_for_issue(it, languages)
-        bucket_counts[b] = bucket_counts.get(b, 0) + 1
-        if _normalize_severity(it.severity) in ("HIGH", "CRITICAL"):
-            bucket_high_crit[b] = True
-
-    if is_pp:
-        defs = [
-            ("ALM & Governance", "Uses env vars + connection references; no hardcoded environment values"),
-            ("Security", "No embedded secrets/tokens; connectors and references are used correctly"),
-            ("Reliability", "Flows use Scopes/runAfter patterns; app formulas handle errors (IfError)"),
-            ("Performance", "No obvious delegation/performance smells (ForAll/LookUp patterns)"),
-            ("Maintainability", "Clear naming; solution metadata present; minimal bloat"),
-            ("Model-driven UX", "Sitemap/navigation and key metadata present"),
-        ]
-    else:
-        defs = [
-            ("Security", "No hard-coded secrets or critical vulnerabilities"),
-            ("Reliability", "Proper error handling and stability"),
-            ("Maintainability", "Readable, modular, maintainable solution"),
-            ("Performance", "No obvious performance bottlenecks"),
-            ("Style", "Consistent standards and conventions"),
-        ]
-
-    rows: List[Dict[str, str]] = []
-    for bucket, text in defs:
-        c = bucket_counts.get(bucket, 0)
-        if bucket == "Security":
-            fail = c > 0 or bucket_high_crit.get(bucket, False)
-        else:
-            fail = c > 0
-
-        rows.append(
-            {
-                "category": bucket,
-                "item": text,
-                "result": "FAIL" if fail else "PASS",
-                "notes": f"{c} issue(s) found" if c else "",
-            }
-        )
-    return rows
-
-
-def overall_from_checklist(checklist: List[Dict[str, str]]) -> str:
-    return "PASS" if all(r.get("result") == "PASS" for r in checklist) else "FAIL"
-
-
-# ============================================================
-# Template shaping (matches report.html)
-# ============================================================
-def _issues_for_template(issues: List[Issue]) -> List[Dict[str, Any]]:
+def _issues_to_ui(issues: List[Issue]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for it in issues or []:
+        fp = getattr(it, "file_path", "") or ""
+        ls = getattr(it, "line_start", 1) or 1
+        le = getattr(it, "line_end", ls) or ls
+
+        location = "—"
+        if fp:
+            location = f"{fp}:{ls}" if le == ls else f"{fp}:{ls}-{le}"
+
+        remediation = getattr(it, "remediation", "") or "—"
+
         out.append(
             {
-                "category": it.category,
-                "severity": it.severity,
-                "title": it.title,
-                "description": it.detail,
-                "file": it.file_path,
-                "line": it.line_start,
-                "suggested_fix": it.remediation,
+                "severity": getattr(it, "severity", "") or "MEDIUM",
+                "category": getattr(it, "category", "") or "Maintainability",
+                "title": getattr(it, "title", "") or "Issue",
+                "location": location,
+                "remediation": remediation,
             }
         )
     return out
 
 
-def _report_for_template(rr: ReviewResult, languages: List[str], files_scanned: int) -> Dict[str, Any]:
-    checklist_rows = []
-    for row in rr.checklist or []:
-        checklist_rows.append(
-            {
-                "category": row.get("category", ""),
-                "check": row.get("item", ""),
-                "status": row.get("result", ""),
-                "evidence": row.get("notes", ""),
-                "remediation": "",
-            }
-        )
+def _make_checklist(issues: List[Issue]) -> List[Dict[str, str]]:
+    buckets = {"Security": 0, "Reliability": 0, "Maintainability": 0, "Performance": 0, "Style": 0}
 
-    return {
-        "primary_language": (languages[0] if languages else "Unknown"),
-        "files_scanned": files_scanned,
-        "overall_checklist_status": rr.overall,
-        "checklist": checklist_rows,
-    }
+    def norm(cat: str) -> str:
+        c = (cat or "").strip()
+        return c if c in buckets else "Maintainability"
+
+    for it in issues or []:
+        buckets[norm(getattr(it, "category", ""))] += 1
+
+    def row(cat: str, check: str) -> Dict[str, str]:
+        count = buckets.get(cat, 0)
+        return {
+            "category": cat,
+            "check": check,
+            "status": "FAIL" if count else "PASS",
+            "evidence": f"{count} issue(s) found" if count else "",
+            "remediation": "",
+        }
+
+    return [
+        row("Security", "No hard-coded secrets or critical vulnerabilities"),
+        row("Reliability", "Proper error handling and stability"),
+        row("Maintainability", "Readable, modular, maintainable solution"),
+        row("Performance", "No obvious performance bottlenecks"),
+        row("Style", "Consistent standards and conventions"),
+    ]
 
 
-# ============================================================
-# Routes
-# ============================================================
 @router.get("/", response_class=HTMLResponse)
-def home_page(request: Request):
+def home(request: Request):
+    _cleanup_cache()
     return render(request, "index.html", {})
 
 
@@ -446,83 +146,62 @@ def home_page(request: Request):
 async def review(
     request: Request,
     source_type: str = Form("zip"),
-    zip_file: Optional[UploadFile] = File(default=None),
-    repo_type: str = Form(""),
+    prepared_by: str = Form(""),
+    project_name: str = Form(""),
+    project_zip: Optional[UploadFile] = File(None),
+    repo_url: str = Form(""),
     repo_path: str = Form(""),
-    branch_name: str = Form(""),
-    prepared_by: str = Form("Automation Factory"),
+    branch: str = Form("main"),
+    repository_type: str = Form("GIT"),
 ):
     _cleanup_cache()
-    prepared_by = "Automation Factory"
 
-    try:
-        if source_type == "zip":
-            if zip_file is None:
-                raise UserFacingRepoError("Please choose a ZIP file.")
-            zip_bytes = await zip_file.read()
-            if not zip_bytes:
-                raise UserFacingRepoError("Uploaded ZIP is empty.")
-            if len(zip_bytes) > MAX_ZIP_MB_UPLOAD * 1024 * 1024:
-                raise UserFacingRepoError(f"ZIP too large. Max allowed is {MAX_ZIP_MB_UPLOAD} MB.")
-            project_display_name = zip_file.filename or "Uploaded ZIP"
+    # support both repo_url and repo_path (your UI uses repo_path)
+    repo = (repo_url or "").strip() or (repo_path or "").strip()
+    source = (source_type or "zip").lower()
 
-        elif source_type == "repo":
-            zip_bytes = await fetch_repo_as_zip_bytes(repo_type, repo_path, branch_name)
+    # Read bytes
+    if source == "zip":
+        if not project_zip:
+            return render(request, "index.html", {"error": "Please upload a ZIP file."}, status_code=400)
 
-            # enforce SAME size limit for repo downloads
-            if len(zip_bytes) > MAX_ZIP_MB_UPLOAD * 1024 * 1024:
-                raise UserFacingRepoError(f"Repository ZIP too large. Max allowed is {MAX_ZIP_MB_UPLOAD} MB.")
+        zip_bytes = await project_zip.read()
+        max_bytes = MAX_ZIP_MB_UPLOAD * 1024 * 1024
+        if len(zip_bytes) > max_bytes:
+            return render(request, "index.html", {"error": f"ZIP too large. Max allowed is {MAX_ZIP_MB_UPLOAD} MB."}, status_code=400)
 
-            project_display_name = repo_path.strip()
+        display_name = project_zip.filename or project_name.strip() or "Project"
+    else:
+        if not repo:
+            return render(request, "index.html", {"error": "Please enter a GitHub repo URL."}, status_code=400)
 
-        else:
-            raise UserFacingRepoError("Invalid source selected.")
+        zip_bytes = _download_github_zip(repo, branch)
+        display_name = project_name.strip() or repo.rstrip("/").split("/")[-1]
 
-    except UserFacingRepoError as e:
-        return render(request, "index.html", {"error": str(e)}, status_code=400)
-    except Exception:
-        return render(
-            request,
-            "index.html",
-            {"error": "Something went wrong while processing your request. Please try again."},
-            status_code=400,
-        )
-
-    entries = read_zip_in_memory(zip_bytes)
-    entries = normalize_zip_entries(entries)
-
+    # ZIP -> files
+    entries = normalize_zip_entries(read_zip_in_memory(zip_bytes))
     text_files = as_text_files(entries)
-    msapps = extract_binary(entries, ".msapp")
+    msapps = extract_binary(entries, extensions={".msapp"})
+    files = filter_files_for_review(text_files)
 
-    if not text_files and not msapps:
-        return render(
-            request,
-            "index.html",
-            {"error": "No readable code or .msapp found in the provided source."},
-            status_code=400,
-        )
-
-    languages = detect_languages(text_files)
-    files_for_review = filter_files_for_review(text_files)
-
+    languages = detect_languages(files)
     issues: List[Issue] = []
 
     if "python" in languages:
-        issues.extend(python_reviewer.review(files_for_review, "python"))
+        issues.extend(python_reviewer.review(files, "python"))
 
     if "powerplatform" in languages:
-        issues.extend(powerplatform_reviewer.review(files_for_review, "powerplatform"))
-        issues.extend(model_driven_reviewer.review(files_for_review, "powerplatform"))
-        for msapp_name, msapp_bytes in msapps.items():
-            issues.extend(canvas_msapp_reviewer.review_msapp(msapp_name, msapp_bytes))
+        issues.extend(powerplatform_reviewer.review(files, "powerplatform"))
+        issues.extend(model_driven_reviewer.review(files, "powerplatform"))
+        for name, blob in (msapps or {}).items():
+            issues.extend(canvas_msapp_reviewer.review_msapp(name, blob))
 
     if os.getenv("OPENAI_API_KEY"):
-        for lang in languages:
-            if lang not in ("python", "powerplatform"):
-                issues.extend(llm_reviewer.review(files_for_review, lang))
+        # run LLM once with hint
+        issues.extend(llm_reviewer.review(files, ", ".join(languages) if languages else "unknown"))
 
-    checklist = make_checklist(issues, languages)
-    overall = overall_from_checklist(checklist)
+    checklist = _make_checklist(issues)
+    overall = "FAIL" if any(r["status"] == "FAIL" for r in checklist) else "PASS"
 
     rr = ReviewResult(
         issues=issues,
@@ -531,68 +210,197 @@ async def review(
         summary=f"Platforms: {', '.join(languages) if languages else 'Unknown'} | Issues: {len(issues)}",
     )
 
-    top_20_files = sorted(list(files_for_review.keys()))[:20]
-
     report_id = str(uuid.uuid4())
-    meta: Dict[str, str] = {
-        "project_name": project_display_name,
-        "prepared_by": prepared_by,
+    issues_ui = _issues_to_ui(issues)
+
+    meta = {
+        "project_name": display_name,
+        "prepared_by": prepared_by.strip() or "Unknown",
         "source_type": source_type,
-        "repo_type": repo_type if source_type == "repo" else "",
-        "repo_path": repo_path if source_type == "repo" else "",
-        "branch_name": branch_name if source_type == "repo" else "",
-        "languages": ", ".join(languages) if languages else "Unknown",
-        "files_analyzed": str(len(entries) if hasattr(entries, "__len__") else 0),
-        "text_files": str(len(text_files)),
-        "msapps": str(len(msapps)),
-        "debug_file_count_after_filter": str(len(files_for_review)),
-        "debug_top_20_files": "\n".join(top_20_files),
+        "repo_url": repo,
+        "branch": branch,
+        "repository_type": repository_type,
     }
 
-    REPORT_CACHE[report_id] = {"created": time.time(), "result": rr, "meta": meta}
+    debug = {
+        "source": "repo" if source != "zip" else "zip",
+        "repo": repo,
+        "branch": branch,
+        "files_after_filter": len(files),
+        "top_files": sorted(list(files.keys()))[:20],
+        "languages": languages,
+    }
 
-    report = _report_for_template(rr, languages, files_scanned=len(text_files))
-    issues_for_ui = _issues_for_template(issues)
+    REPORT_CACHE[report_id] = {
+        "created": time.time(),
+        "issues_ui": issues_ui,
+        "checklist": checklist,
+        "result": rr,
+        "meta": meta,
+        "debug": debug,
+    }
+
+    report = {
+        "overall": overall,
+        "languages": ", ".join(languages) if languages else "Unknown",
+        "files_scanned": len(files),
+        "summary": rr.summary,
+    }
 
     return render(
         request,
         "report.html",
-        {"report_id": report_id, "meta": meta, "report": report, "issues": issues_for_ui},
+        {
+            "report_id": report_id,
+            "issues": issues_ui,
+            "checklist": checklist,
+            "checklist_rows": checklist,
+            "final_checklist": checklist,
+            "report": report,
+            "meta": meta,
+            "debug": debug,
+            "result": rr,
+        },
     )
 
 
-@router.get("/report/{report_id}", response_class=HTMLResponse)
-def report_html(request: Request, report_id: str):
-    _cleanup_cache()
-    item = REPORT_CACHE.get(report_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Report expired")
-
-    rr = item["result"]
-    meta: Dict[str, str] = item["meta"]
-
-    languages = [x.strip().lower() for x in (meta.get("languages") or "").split(",") if x.strip()]
-    report = _report_for_template(rr, languages, files_scanned=int(meta.get("text_files", "0") or "0"))
-    issues_for_ui = _issues_for_template(rr.issues)
-
-    return render(
-        request,
-        "report.html",
-        {"report_id": report_id, "meta": meta, "report": report, "issues": issues_for_ui},
-    )
-
-
-# ✅ FIXED PDF ROUTE (no ".pdf" suffix)
+# ✅ PDF TABLE ENDPOINT (works at /ai-code-review/report/{id}/pdf once router is mounted with prefix)
 @router.get("/report/{report_id}/pdf")
 def report_pdf(report_id: str):
     _cleanup_cache()
     item = REPORT_CACHE.get(report_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Report expired")
+        raise HTTPException(status_code=404, detail="Report not found or expired.")
 
-    pdf_bytes = build_pdf_report(item["result"], meta=item["meta"])
-    return StreamingResponse(
-        iter([pdf_bytes]),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=code_review_{report_id}.pdf"},
+    issues = item.get("issues_ui", []) or []
+    checklist = item.get("checklist", []) or []
+    meta = item.get("meta", {}) or {}
+    rr: ReviewResult = item.get("result")
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=14 * mm,
+        rightMargin=14 * mm,
+        topMargin=14 * mm,
+        bottomMargin=14 * mm,
+        title="AI Code Review Report",
+        author=str(meta.get("prepared_by", "Unknown")),
     )
+
+    styles = getSampleStyleSheet()
+    title_style = styles["Title"]
+    small = ParagraphStyle("small", parent=styles["BodyText"], fontSize=9, leading=11)
+
+    cell = ParagraphStyle("cell", fontName="Helvetica", fontSize=8.5, leading=10)
+    cell_bold = ParagraphStyle("cell_bold", parent=cell, fontName="Helvetica-Bold")
+
+    story: List[Any] = []
+
+    # Header
+    story.append(Paragraph("AI Code Review Report", title_style))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"<b>Report ID:</b> {report_id}", small))
+    story.append(Paragraph(f"<b>Project:</b> {meta.get('project_name','')}", small))
+    story.append(Paragraph(f"<b>Prepared by:</b> {meta.get('prepared_by','Unknown')}", small))
+    story.append(Paragraph(f"<b>Overall:</b> {(rr.overall if rr else '')}", small))
+    story.append(Paragraph(f"<b>Total issues:</b> {len(issues)}", small))
+    story.append(Spacer(1, 10))
+
+    # Findings Table
+    story.append(Paragraph("Findings", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+
+    if not issues:
+        story.append(Paragraph("No issues found 🎉", styles["BodyText"]))
+    else:
+        data = [[
+            Paragraph("<b>#</b>", cell_bold),
+            Paragraph("<b>Severity</b>", cell_bold),
+            Paragraph("<b>Category</b>", cell_bold),
+            Paragraph("<b>Title</b>", cell_bold),
+            Paragraph("<b>Location</b>", cell_bold),
+            Paragraph("<b>Remediation</b>", cell_bold),
+        ]]
+
+        max_rows = int(os.getenv("PDF_MAX_ISSUES", "250"))
+        for idx, it in enumerate(issues[:max_rows], start=1):
+            data.append([
+                Paragraph(str(idx), cell),
+                Paragraph(str(it.get("severity", "—")), cell),
+                Paragraph(str(it.get("category", "—")), cell),
+                Paragraph(str(it.get("title", "—")), cell),
+                Paragraph(str(it.get("location", "—")), cell),
+                Paragraph(str(it.get("remediation", "—")), cell),
+            ])
+
+        col_widths = [10 * mm, 18 * mm, 22 * mm, 55 * mm, 28 * mm, 47 * mm]
+        t = Table(data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#334155")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#F8FAFC"), colors.HexColor("#EEF2FF")]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(t)
+
+    # Checklist on new page
+    story.append(PageBreak())
+    story.append(Paragraph("Final Checklist", styles["Heading2"]))
+    story.append(Paragraph("Pass/Fail summary by category.", small))
+    story.append(Spacer(1, 8))
+
+    cdata = [[
+        Paragraph("<b>Category</b>", cell_bold),
+        Paragraph("<b>Check</b>", cell_bold),
+        Paragraph("<b>Status</b>", cell_bold),
+        Paragraph("<b>Evidence</b>", cell_bold),
+        Paragraph("<b>Remediation</b>", cell_bold),
+    ]]
+
+    for row in checklist:
+        cdata.append([
+            Paragraph(str(row.get("category", "—")), cell),
+            Paragraph(str(row.get("check", "—")), cell),
+            Paragraph(str(row.get("status", "—")), cell),
+            Paragraph(str(row.get("evidence", "")), cell),
+            Paragraph(str(row.get("remediation", "")), cell),
+        ])
+
+    ccol_widths = [26 * mm, 65 * mm, 18 * mm, 35 * mm, 36 * mm]
+    ct = Table(cdata, colWidths=ccol_widths, repeatRows=1)
+    ct.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#334155")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#F8FAFC"), colors.HexColor("#EEF2FF")]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(ct)
+
+    doc.build(story)
+    buf.seek(0)
+
+    filename = f"code_review_{report_id}.pdf"
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+__all__ = ["router"]

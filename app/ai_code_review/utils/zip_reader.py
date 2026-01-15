@@ -1,51 +1,141 @@
+# ai-sdlc-suite/app/ai_code_review/utils/zip_reader.py
+from __future__ import annotations
+
 import io
+import os
 import zipfile
-from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, Iterable, Optional, Set, Tuple
 
 
-@dataclass(frozen=True)
-class ZipFileEntry:
-    path: str
-    content: bytes
-
-
-def read_zip_in_memory(zip_bytes: bytes, max_file_bytes: int = 8_000_000) -> List[ZipFileEntry]:
+def read_zip_in_memory(zip_bytes: bytes) -> Dict[str, bytes]:
     """
-    Reads a ZIP fully in-memory. Does NOT extract to disk.
-    Keeps binary entries too (needed for .msapp).
+    Read a ZIP (bytes) and return a dict: { path: raw_bytes }.
     """
-    entries: List[ZipFileEntry] = []
-    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+    if not zip_bytes:
+        return {}
+
+    out: Dict[str, bytes] = {}
+    with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as z:
         for info in z.infolist():
             if info.is_dir():
                 continue
-            if info.file_size > max_file_bytes:
+            name = (info.filename or "").replace("\\", "/").lstrip("/")
+            if not name:
                 continue
-            with z.open(info) as f:
-                entries.append(ZipFileEntry(path=info.filename, content=f.read()))
-    return entries
-
-
-def as_text_files(entries: List[ZipFileEntry]) -> Dict[str, str]:
-    """
-    Best-effort decode to UTF-8 text. Non-text files decode with replacement.
-    """
-    out: Dict[str, str] = {}
-    for e in entries:
-        try:
-            out[e.path] = e.content.decode("utf-8", errors="replace")
-        except Exception:
-            continue
+            try:
+                out[name] = z.read(info.filename)
+            except Exception:
+                # ignore unreadable entries
+                continue
     return out
 
 
-def extract_binary(entries: List[ZipFileEntry], suffix_lower: str) -> Dict[str, bytes]:
+def normalize_zip_entries(entries: Dict[str, bytes]) -> Dict[str, bytes]:
     """
-    Returns dict of filename->bytes for entries matching suffix (e.g. '.msapp').
+    GitHub (and many tools) wrap repo contents in a top-level folder:
+      repo-main/app/main.py -> app/main.py
+    This strips that top folder IF all files share it.
     """
+    if not entries:
+        return entries
+
+    keys = [k for k in entries.keys() if isinstance(k, str) and k]
+    if not keys:
+        return entries
+
+    # Determine common top folder
+    top = None
+    for k in keys:
+        k2 = k.replace("\\", "/")
+        if "/" not in k2:
+            top = None
+            break
+        first = k2.split("/")[0]
+        if not first:
+            top = None
+            break
+        if top is None:
+            top = first
+        elif top != first:
+            top = None
+            break
+
+    if not top:
+        return entries
+
+    # Confirm all keys start with top + "/"
+    prefix = top + "/"
+    if not all(k.replace("\\", "/").startswith(prefix) for k in keys):
+        return entries
+
+    new_map: Dict[str, bytes] = {}
+    for k, v in entries.items():
+        kk = k.replace("\\", "/")
+        if kk.startswith(prefix):
+            kk = kk[len(prefix):]
+        new_map[kk] = v
+    return new_map
+
+
+def as_text_files(entries: Dict[str, bytes], max_bytes: int = 500_000) -> Dict[str, str]:
+    """
+    Convert ZIP entries to text files dict[path -> decoded string].
+    Skips very large files and binary-like extensions.
+    """
+    if not entries:
+        return {}
+
+    binary_exts = {
+        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico",
+        ".exe", ".dll", ".so", ".dylib",
+        ".zip", ".7z", ".rar", ".tar", ".gz",
+        ".pdf", ".docx", ".pptx", ".xlsx",
+        ".pyc", ".class",
+    }
+
+    out: Dict[str, str] = {}
+    for path, data in entries.items():
+        p = (path or "").replace("\\", "/").lstrip("/")
+        if not p or p.endswith("/"):
+            continue
+
+        ext = os.path.splitext(p.lower())[1]
+        if ext in binary_exts:
+            continue
+
+        if not isinstance(data, (bytes, bytearray)):
+            continue
+
+        if len(data) > max_bytes:
+            continue
+
+        try:
+            out[p] = data.decode("utf-8", errors="ignore")
+        except Exception:
+            continue
+
+    return out
+
+
+def extract_binary(entries: Dict[str, bytes], extensions: Optional[Set[str]] = None) -> Dict[str, bytes]:
+    """
+    Extract binary files by extension (e.g., {'.msapp'}).
+    Returns dict[path -> bytes]
+    """
+    if not entries:
+        return {}
+
+    exts = {e.lower() for e in (extensions or set())}
     out: Dict[str, bytes] = {}
-    for e in entries:
-        if e.path.lower().endswith(suffix_lower):
-            out[e.path] = e.content
+
+    for path, data in entries.items():
+        p = (path or "").replace("\\", "/").lstrip("/")
+        if not p or p.endswith("/"):
+            continue
+        ext = os.path.splitext(p.lower())[1]
+        if exts and ext not in exts:
+            continue
+        if isinstance(data, (bytes, bytearray)):
+            out[p] = bytes(data)
+
     return out
