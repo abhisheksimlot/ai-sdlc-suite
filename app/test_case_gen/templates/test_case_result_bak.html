@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-lg">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <h2 class="text-3xl font-semibold mb-1">Generated SIT Test Cases</h2>
+      <p class="text-slate-300">Job ID: <span class="font-mono text-slate-200">{{ job_id }}</span></p>
+    </div>
+    <div class="flex gap-3">
+      <a href="./{{ job_id }}/xlsx"
+         class="rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white hover:bg-emerald-500 transition">
+        Download Excel
+      </a>
+      <a href="./{{ job_id }}/pdf"
+         class="rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white hover:bg-indigo-500 transition">
+        Download PDF
+      </a>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="mt-6 rounded-xl border border-slate-700 bg-slate-800 p-5">
+    <h3 class="text-xl font-semibold mb-2">Summary</h3>
+    <p class="text-slate-200 whitespace-pre-line">{{ summary.scope_notes or "-" }}</p>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div class="mt-8">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <h3 class="text-2xl font-semibold">Test Cases (Table)</h3>
+      <p class="text-sm text-slate-400">
+        Tip: Scroll horizontally if needed. Long fields wrap.
+      </p>
+    </div>
+
+    <div class="mt-4 overflow-x-auto rounded-xl border border-slate-700 bg-slate-800">
+      <table class="min-w-[1400px] w-full text-sm">
+        <thead class="bg-slate-900/60">
+          <tr class="text-left text-slate-200">
+            <th class="p-3 border-b border-slate-700">ID</th>
+            <th class="p-3 border-b border-slate-700">Category</th>
+            <th class="p-3 border-b border-slate-700">Priority</th>
+            <th class="p-3 border-b border-slate-700">Title</th>
+            <th class="p-3 border-b border-slate-700">Story Refs</th>
+            <th class="p-3 border-b border-slate-700">Preconditions</th>
+            <th class="p-3 border-b border-slate-700">Test Data</th>
+            <th class="p-3 border-b border-slate-700">Steps</th>
+            <th class="p-3 border-b border-slate-700">Expected Results</th>
+            <th class="p-3 border-b border-slate-700">Notes</th>
+          </tr>
+        </thead>
+
+        <tbody class="text-slate-200">
+          {% for tc in test_cases %}
+          <tr class="align-top hover:bg-slate-700/40 transition">
+            <td class="p-3 border-b border-slate-700 font-mono whitespace-nowrap">{{ tc.id }}</td>
+            <td class="p-3 border-b border-slate-700 whitespace-nowrap">{{ tc.category }}</td>
+            <td class="p-3 border-b border-slate-700 whitespace-nowrap">{{ tc.priority }}</td>
+
+            <td class="p-3 border-b border-slate-700">
+              <div class="font-semibold text-slate-100">{{ tc.title }}</div>
+            </td>
+
+            <td class="p-3 border-b border-slate-700">
+              {% if tc.story_refs %}
+                <div class="whitespace-pre-wrap break-words">{{ (tc.story_refs or [])|join(", ") }}</div>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="p-3 border-b border-slate-700">
+              {% if tc.preconditions %}
+                <ul class="list-disc list-inside space-y-1 whitespace-pre-wrap break-words">
+                  {% for x in (tc.preconditions or []) %}
+                    <li>{{ x }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="p-3 border-b border-slate-700">
+              {% if tc.test_data %}
+                <ul class="list-disc list-inside space-y-1 whitespace-pre-wrap break-words">
+                  {% for x in (tc.test_data or []) %}
+                    <li>{{ x }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="p-3 border-b border-slate-700">
+              {% if tc.steps %}
+                <ol class="list-decimal list-inside space-y-1 whitespace-pre-wrap break-words">
+                  {% for x in (tc.steps or []) %}
+                    <li>{{ x }}</li>
+                  {% endfor %}
+                </ol>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="p-3 border-b border-slate-700">
+              {% if tc.expected_results %}
+                <ul class="list-disc list-inside space-y-1 whitespace-pre-wrap break-words">
+                  {% for x in (tc.expected_results or []) %}
+                    <li>{{ x }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="p-3 border-b border-slate-700">
+              {% if tc.notes %}
+                <ul class="list-disc list-inside space-y-1 whitespace-pre-wrap break-words">
+                  {% for x in (tc.notes or []) %}
+                    <li>{{ x }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- OPTIONAL: keep detailed view (including Gherkin) -->
+  <div class="mt-8">
+    <details class="rounded-xl border border-slate-700 bg-slate-800 p-5">
+      <summary class="cursor-pointer select-none text-slate-100 font-semibold">
+        Show detailed view (Steps + Expected + Gherkin per test case)
+      </summary>
+
+      <div class="mt-5 space-y-4">
+        {% for tc in test_cases %}
+        <div class="rounded-xl border border-slate-700 bg-slate-900 p-5">
+          <div class="flex flex-wrap items-center gap-3 mb-2">
+            <span class="font-mono text-slate-200">{{ tc.id }}</span>
+            <span class="text-sm rounded-full bg-slate-800 border border-slate-700 px-3 py-1 text-slate-200">{{ tc.category }}</span>
+            <span class="text-sm rounded-full bg-slate-800 border border-slate-700 px-3 py-1 text-slate-200">Priority: {{ tc.priority }}</span>
+            <span class="text-sm text-slate-300">Refs: {{ (tc.story_refs or [])|join(", ") }}</span>
+          </div>
+
+          <h4 class="text-xl font-semibold text-slate-100 mb-3">{{ tc.title }}</h4>
+
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <h5 class="font-semibold text-slate-100 mb-2">Steps</h5>
+              <ol class="list-decimal list-inside text-slate-200 space-y-1">
+                {% for x in (tc.steps or []) %}<li>{{ x }}</li>{% endfor %}
+                {% if not (tc.steps or []) %}<li>-</li>{% endif %}
+              </ol>
+            </div>
+            <div>
+              <h5 class="font-semibold text-slate-100 mb-2">Expected Results</h5>
+              <ul class="list-disc list-inside text-slate-200 space-y-1">
+                {% for x in (tc.expected_results or []) %}<li>{{ x }}</li>{% endfor %}
+                {% if not (tc.expected_results or []) %}<li>-</li>{% endif %}
+              </ul>
+            </div>
+          </div>
+
+          {% if (tc.gherkin or []) %}
+          <div class="mt-4 rounded-xl bg-slate-800 border border-slate-700 p-4">
+            <h5 class="font-semibold text-slate-100 mb-2">Gherkin</h5>
+            {% for g in (tc.gherkin or []) %}
+              <div class="mb-3">
+                <div class="text-slate-200"><span class="font-semibold">Feature:</span> {{ g.feature }}</div>
+                <div class="text-slate-200"><span class="font-semibold">Scenario:</span> {{ g.scenario }}</div>
+                <div class="mt-2 text-slate-200"><span class="font-semibold">Given:</span> {{ (g.given or [])|join(" | ") }}</div>
+                <div class="text-slate-200"><span class="font-semibold">When:</span> {{ (g.when or [])|join(" | ") }}</div>
+                <div class="text-slate-200"><span class="font-semibold">Then:</span> {{ (g.then or [])|join(" | ") }}</div>
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+  </div>
+
+  <div class="mt-8">
+    <a href="./"
+       class="rounded-xl border border-slate-700 bg-slate-800 px-6 py-3 font-semibold text-slate-200 hover:bg-slate-700 transition">
+      Generate Another
+    </a>
+  </div>
+</div>
+
+{% endblock %}

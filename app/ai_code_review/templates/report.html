@@ -1,25 +1,30 @@
 {# ai-sdlc-suite/app/ai_code_review/templates/report.html #}
 {% extends "base.html" %}
+{% block title %}Code Review Report{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="max-w-7xl mx-auto space-y-8">
 
   <!-- Header -->
-  <div class="flex items-start justify-between gap-6">
+  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
     <div>
-      <h1 class="text-3xl font-semibold text-white">Code Review Report</h1>
-      <p class="text-slate-300 mt-1">
+      <h1 class="text-4xl font-extrabold tracking-tight text-gray-900">Code Review Report</h1>
+      <p class="mt-2 text-gray-600">
         Generated for (Auto) • {{ debug.source | default("zip") | title }}
       </p>
     </div>
 
     <div class="flex gap-3">
       <a href="/ai-code-review/report/{{ report_id }}/pdf"
-         class="inline-flex items-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-400 transition">
+         class="inline-flex items-center justify-center rounded-full bg-yellow-400 px-6 py-3
+                text-sm font-extrabold text-black shadow-lg shadow-yellow-200/60
+                hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-yellow-200 transition">
         Download PDF
       </a>
+
       <a href="/ai-code-review/"
-         class="inline-flex items-center rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition">
+         class="inline-flex items-center justify-center rounded-full bg-gray-900 px-6 py-3
+                text-sm font-extrabold text-white shadow hover:bg-black transition">
         New Review
       </a>
     </div>
@@ -27,110 +32,126 @@
 
   <!-- Summary cards -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-      <div class="text-xs uppercase tracking-wide text-slate-400">Prepared By</div>
-      <div class="mt-2 text-lg font-semibold text-white">
+    <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+      <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Prepared By</div>
+      <div class="mt-2 text-xl font-extrabold text-gray-900">
         {{ meta.prepared_by | default("Unknown") }}
       </div>
     </div>
 
-    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-      <div class="text-xs uppercase tracking-wide text-slate-400">Languages</div>
-      <div class="mt-2 text-white">
-        <div class="font-semibold">{{ report.languages | default("Unknown") }}</div>
-        <div class="text-slate-400 text-sm mt-1">Files scanned (text): {{ report.files_scanned | default(0) }}</div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+      <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Languages</div>
+      <div class="mt-2 text-gray-900">
+        <div class="text-xl font-extrabold">
+          {{ report.languages | default("Unknown") }}
+        </div>
+        <div class="text-gray-600 text-sm mt-2">
+          Files scanned (text): {{ report.files_scanned | default(0) }}
+        </div>
       </div>
     </div>
 
-    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-      <div class="text-xs uppercase tracking-wide text-slate-400">Overall Checklist</div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+      <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Checklist</div>
       <div class="mt-3">
         {% set ov = report.overall | default("PASS") %}
         {% if ov == "FAIL" %}
-          <span class="inline-flex rounded-full bg-red-900/60 px-3 py-1 text-xs font-semibold text-red-200">FAIL</span>
+          <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-800">FAIL</span>
         {% else %}
-          <span class="inline-flex rounded-full bg-emerald-900/60 px-3 py-1 text-xs font-semibold text-emerald-200">PASS</span>
+          <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-800">PASS</span>
         {% endif %}
       </div>
-      <div class="mt-3 text-slate-400 text-sm">Report ID: {{ report_id }}</div>
+      <div class="mt-3 text-gray-600 text-sm">
+        Report ID: <span class="font-mono">{{ report_id }}</span>
+      </div>
     </div>
   </div>
 
   <!-- Repo meta strip -->
-  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+  <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
       <div>
-        <div class="text-slate-400 uppercase text-xs tracking-wide">Repository</div>
-        <div class="mt-1 text-white break-all">{{ meta.repo_url | default("") }}</div>
+        <div class="text-gray-500 uppercase text-xs font-semibold tracking-wide">Repository</div>
+        <div class="mt-2 text-gray-900 break-all font-semibold">{{ meta.repo_url | default("") }}</div>
       </div>
       <div>
-        <div class="text-slate-400 uppercase text-xs tracking-wide">Branch</div>
-        <div class="mt-1 text-white">{{ meta.branch | default("") }}</div>
+        <div class="text-gray-500 uppercase text-xs font-semibold tracking-wide">Branch</div>
+        <div class="mt-2 text-gray-900 font-semibold">{{ meta.branch | default("") }}</div>
       </div>
       <div>
-        <div class="text-slate-400 uppercase text-xs tracking-wide">Repo Type</div>
-        <div class="mt-1 text-white">{{ meta.repository_type | default("") }}</div>
+        <div class="text-gray-500 uppercase text-xs font-semibold tracking-wide">Repo Type</div>
+        <div class="mt-2 text-gray-900 font-semibold">{{ meta.repository_type | default("") }}</div>
       </div>
     </div>
   </div>
 
   <!-- Findings -->
-  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+  <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
     <div class="flex items-center justify-between">
-      <h2 class="text-xl font-semibold text-white">Findings</h2>
-      <div class="text-slate-300 text-sm">Total issues: {{ (issues | length) if issues else 0 }}</div>
+      <h2 class="text-2xl font-extrabold text-gray-900">Findings</h2>
+      <div class="text-gray-700 text-sm font-semibold">
+        Total issues: {{ (issues | length) if issues else 0 }}
+      </div>
     </div>
 
     {% if not issues or (issues|length) == 0 %}
-      <div class="mt-6 text-slate-300">No issues found 🎉</div>
+      <div class="mt-6 text-gray-600">No issues found 🎉</div>
     {% else %}
       <div class="mt-6 overflow-x-auto">
         <table class="w-full text-left text-sm">
-          <thead class="text-slate-300">
-            <tr class="border-b border-slate-800">
-              <th class="py-3 pr-4">Category</th>
-              <th class="py-3 pr-4">Severity</th>
-              <th class="py-3 pr-4">Title</th>
-              <th class="py-3 pr-4">Location</th>
-              <th class="py-3 pr-4">Remediation</th>
+          <thead class="bg-gray-50">
+            <tr class="border-b border-gray-200 text-xs font-bold uppercase tracking-wide text-gray-600">
+              <th class="py-3 px-3">Category</th>
+              <th class="py-3 px-3">Severity</th>
+              <th class="py-3 px-3">Title</th>
+              <th class="py-3 px-3">Location</th>
+              <th class="py-3 px-3">Remediation</th>
             </tr>
           </thead>
-          <tbody class="text-slate-200">
-            {% for i in issues %}
-              <tr class="border-b border-slate-800 align-top">
-                <td class="py-4 pr-4">{{ i.category | default("—") }}</td>
 
-                <td class="py-4 pr-4">
+          <tbody class="divide-y divide-gray-200 text-gray-800">
+            {% for i in issues %}
+              <tr class="align-top">
+                <td class="py-4 px-3 font-semibold text-gray-900">{{ i.category | default("—") }}</td>
+
+                <td class="py-4 px-3">
                   {% set sev = (i.severity | default("MEDIUM")) %}
-                  <span class="inline-flex rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold">
+                  <span class="inline-flex rounded-full px-3 py-1 text-xs font-extrabold
+                    {% if sev in ['HIGH','CRITICAL'] %}
+                      bg-red-100 text-red-800
+                    {% elif sev == 'LOW' %}
+                      bg-gray-100 text-gray-800
+                    {% else %}
+                      bg-yellow-100 text-yellow-900
+                    {% endif %}">
                     {{ sev }}
                   </span>
                 </td>
 
-                <td class="py-4 pr-4 font-semibold text-white">
+                <td class="py-4 px-3 font-semibold text-gray-900">
                   {{ i.title | default("—") }}
                 </td>
 
                 <!-- ✅ LOCATION: uses i.location first, else file_path:line_start -->
-                <td class="py-4 pr-4 text-slate-300">
+                <td class="py-4 px-3 text-gray-700">
                   {% set loc = i.location | default("") %}
                   {% if not loc %}
                     {% set fp = i.file_path | default("") %}
                     {% set ls = i.line_start | default("") %}
                     {% if fp and ls %}
-                      {{ fp }}:{{ ls }}
+                      <span class="font-mono text-xs">{{ fp }}:{{ ls }}</span>
                     {% elif fp %}
-                      {{ fp }}
+                      <span class="font-mono text-xs">{{ fp }}</span>
                     {% else %}
                       —
                     {% endif %}
                   {% else %}
-                    {{ loc }}
+                    <span class="font-mono text-xs">{{ loc }}</span>
                   {% endif %}
                 </td>
 
                 <!-- ✅ REMEDIATION -->
-                <td class="py-4 pr-4 text-slate-300">
+                <td class="py-4 px-3 text-gray-700">
                   {% if i.remediation and (i.remediation | trim) %}
                     {{ i.remediation }}
                   {% else %}
@@ -146,39 +167,40 @@
   </div>
 
   <!-- Final Checklist -->
-  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-    <h2 class="text-xl font-semibold text-white">Final Checklist</h2>
-    <p class="text-slate-400 text-sm mt-1">Pass/Fail summary by category.</p>
+  <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+    <h2 class="text-2xl font-extrabold text-gray-900">Final Checklist</h2>
+    <p class="text-gray-600 text-sm mt-1">Pass/Fail summary by category.</p>
 
     {% set cl = checklist_rows if checklist_rows is defined else checklist %}
     {% if not cl or (cl|length) == 0 %}
-      <div class="mt-6 text-slate-300">No checklist data available.</div>
+      <div class="mt-6 text-gray-600">No checklist data available.</div>
     {% else %}
       <div class="mt-6 overflow-x-auto">
         <table class="w-full text-left text-sm">
-          <thead class="text-slate-300">
-            <tr class="border-b border-slate-800">
-              <th class="py-3 pr-4">Category</th>
-              <th class="py-3 pr-4">Check</th>
-              <th class="py-3 pr-4">Status</th>
-              <th class="py-3 pr-4">Evidence</th>
-              <th class="py-3 pr-4">Remediation</th>
+          <thead class="bg-gray-50">
+            <tr class="border-b border-gray-200 text-xs font-bold uppercase tracking-wide text-gray-600">
+              <th class="py-3 px-3">Category</th>
+              <th class="py-3 px-3">Check</th>
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3">Evidence</th>
+              <th class="py-3 px-3">Remediation</th>
             </tr>
           </thead>
-          <tbody class="text-slate-200">
+
+          <tbody class="divide-y divide-gray-200 text-gray-800">
             {% for row in cl %}
-              <tr class="border-b border-slate-800 align-top">
-                <td class="py-4 pr-4">{{ row.category }}</td>
-                <td class="py-4 pr-4 text-white font-semibold">{{ row.check }}</td>
-                <td class="py-4 pr-4">
+              <tr class="align-top">
+                <td class="py-4 px-3 font-semibold text-gray-900">{{ row.category }}</td>
+                <td class="py-4 px-3 text-gray-900 font-semibold">{{ row.check }}</td>
+                <td class="py-4 px-3">
                   {% if row.status == "FAIL" %}
-                    <span class="inline-flex rounded-full bg-red-900/60 px-3 py-1 text-xs font-semibold text-red-200">FAIL</span>
+                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-800">FAIL</span>
                   {% else %}
-                    <span class="inline-flex rounded-full bg-emerald-900/60 px-3 py-1 text-xs font-semibold text-emerald-200">PASS</span>
+                    <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-800">PASS</span>
                   {% endif %}
                 </td>
-                <td class="py-4 pr-4 text-slate-300">{{ row.evidence | default("") }}</td>
-                <td class="py-4 pr-4 text-slate-300">{{ row.remediation | default("") }}</td>
+                <td class="py-4 px-3 text-gray-700">{{ row.evidence | default("") }}</td>
+                <td class="py-4 px-3 text-gray-700">{{ row.remediation | default("") }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -188,21 +210,23 @@
   </div>
 
   <!-- Debug -->
-  <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-    <h2 class="text-xl font-semibold text-white">Debug</h2>
-    <p class="text-slate-400 text-sm mt-1">Use this to compare ZIP vs Repo runs (file count + top file paths after filtering).</p>
+  <div class="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+    <h2 class="text-2xl font-extrabold text-gray-900">Debug</h2>
+    <p class="text-gray-600 text-sm mt-1">
+      Use this to compare ZIP vs Repo runs (file count + top file paths after filtering).
+    </p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 text-sm">
-      <div class="text-slate-200 space-y-2">
-        <div><span class="text-slate-400">Source:</span> {{ debug.source | default("") }}</div>
-        <div><span class="text-slate-400">Repo:</span> {{ debug.repo | default("") }}</div>
-        <div><span class="text-slate-400">Branch:</span> {{ debug.branch | default("") }}</div>
-        <div><span class="text-slate-400">Files after filter:</span> {{ debug.files_after_filter | default("") }}</div>
+      <div class="text-gray-800 space-y-2">
+        <div><span class="text-gray-500 font-semibold">Source:</span> {{ debug.source | default("") }}</div>
+        <div><span class="text-gray-500 font-semibold">Repo:</span> {{ debug.repo | default("") }}</div>
+        <div><span class="text-gray-500 font-semibold">Branch:</span> {{ debug.branch | default("") }}</div>
+        <div><span class="text-gray-500 font-semibold">Files after filter:</span> {{ debug.files_after_filter | default("") }}</div>
       </div>
 
       <div>
-        <div class="text-slate-400 uppercase text-xs tracking-wide">Top Files (first 20)</div>
-        <div class="mt-2 rounded-xl border border-slate-800 bg-slate-950 p-3 h-44 overflow-auto text-slate-200">
+        <div class="text-gray-500 uppercase text-xs font-semibold tracking-wide">Top Files (first 20)</div>
+        <div class="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3 h-44 overflow-auto text-gray-800">
           {% if debug.top_files and (debug.top_files|length) > 0 %}
             <ul class="space-y-1">
               {% for f in debug.top_files %}
@@ -210,7 +234,7 @@
               {% endfor %}
             </ul>
           {% else %}
-            <div class="text-slate-500">No debug file list available.</div>
+            <div class="text-gray-500">No debug file list available.</div>
           {% endif %}
         </div>
       </div>

@@ -7,7 +7,7 @@
     Choose a tool to open.
   </p>
 
-  <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+  <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
 
     <!-- User Story -->
     <a href="/user-story/"
@@ -16,7 +16,7 @@
       <p class="text-slate-300 mt-2">
         Conversation / transcript → Jira stories + Word output
       </p>
-      <div class="mt-5 inline-flex rounded-xl bg-indigo-600 px-4 py-2 font-semibold">
+      <div class="mt-5 inline-flex rounded-xl bg-red-600 px-4 py-2 font-semibold">
         Open
       </div>
     </a>
@@ -28,13 +28,14 @@
       <p class="text-slate-300 mt-2">
         Jira stories → Solution Design Document (DOCX)
       </p>
-      <div class="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2 font-semibold">
+      <div class="mt-5 inline-flex rounded-xl bg-indigo-600 px-4 py-2 font-semibold">
         Open
       </div>
     </a>
 
-    <!-- Existing Code Review Checklist -->
-    <a href="/code-review/"
+    <!-- Existing Code Review Checklist --> 
+    <!--Commenting to get rid of coding review-->
+    <!--<a href="/code-review/"
        class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
       <h3 class="text-xl font-semibold">Code Review Checklist</h3>
       <p class="text-slate-300 mt-2">
@@ -43,19 +44,29 @@
       <div class="mt-5 inline-flex rounded-xl bg-amber-600 px-4 py-2 font-semibold">
         Open
       </div>
-    </a>
-
+    </a> -->
     <!-- ✅ NEW: AI Code Review -->
     <a href="/ai-code-review/"
        class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
-      <h3 class="text-xl font-semibold">AI Code Review</h3>
+      <h3 class="text-xl font-semibold">Code Review</h3>
       <p class="text-slate-300 mt-2">
         ZIP upload → findings with file + line number + remediation + final checklist
       </p>
-      <div class="mt-5 inline-flex rounded-xl bg-orange-600 px-4 py-2 font-semibold">
+      <div class="mt-5 inline-flex rounded-xl bg-yellow-600 px-4 py-2 font-semibold">
         Open
       </div>
     </a>
+
+    <!--  Test Case Generation-->
+    <a href="/test-cases/"
+        class="rounded-xl border border-slate-700 bg-slate-800 p-6 hover:bg-slate-700 transition">
+        <h3 class="text-xl font-semibold mb-1">Test Case Generation</h3>
+        <p class="text-slate-300">Generate SIT test cases </p>
+        <div class="mt-5 inline-flex rounded-xl bg-green-600 px-4 py-2 font-semibold">
+        Open
+      </div>
+    </a>  
+    
 
   </div>
 </div>

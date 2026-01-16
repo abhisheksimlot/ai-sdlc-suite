@@ -6,8 +6,6 @@ import uuid
 import urllib.request
 import urllib.parse
 import urllib.error
-import re
-import subprocess
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 
@@ -51,70 +49,6 @@ llm_reviewer = LLMFallbackReviewer()
 REPORT_CACHE: Dict[str, Dict[str, Any]] = {}
 REPORT_TTL_SECONDS = 30 * 60
 MAX_ZIP_MB_UPLOAD = int(os.getenv("MAX_ZIP_MB_UPLOAD", "500"))
-
-# -----------------------------
-# Repo/Branch validation helpers
-# -----------------------------
-_GITHUB_REPO_RE = re.compile(r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?/?$")
-
-
-def _is_valid_github_repo_url(repo_url: str) -> bool:
-    repo_url = (repo_url or "").strip()
-    return bool(_GITHUB_REPO_RE.match(repo_url))
-
-
-def _git_branch_exists(repo_url: str, branch: str) -> bool:
-    """
-    Checks remote branch existence using git ls-remote.
-    Returns True if refs/heads/<branch> exists.
-
-    NOTE: This requires 'git' to be installed and available in PATH.
-    """
-    repo_url = (repo_url or "").strip().rstrip("/")
-    branch = (branch or "").strip()
-
-    if not repo_url or not branch:
-        return False
-
-    try:
-        proc = subprocess.run(
-            ["git", "ls-remote", "--heads", repo_url, branch],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if proc.returncode != 0:
-            return False
-        return bool(proc.stdout.strip())
-    except Exception:
-        return False
-
-
-def _validate_repo_inputs(repo: str, branch: str) -> Dict[str, str]:
-    """
-    Returns field errors: {"repo": "...", "branch": "..."}
-    """
-    errors: Dict[str, str] = {}
-    repo = (repo or "").strip()
-    branch = (branch or "").strip()
-
-    if not repo:
-        errors["repo"] = "Please enter a GitHub repo URL."
-        return errors
-
-    if not _is_valid_github_repo_url(repo):
-        errors["repo"] = "Invalid GitHub URL. Example: https://github.com/org/repo"
-        return errors
-
-    if not branch:
-        errors["branch"] = "Please enter a branch name (e.g., main)."
-        return errors
-
-    if not _git_branch_exists(repo, branch):
-        errors["branch"] = f"Branch '{branch}' not found in this repository."
-        return errors
-
-    return errors
 
 
 def _cleanup_cache() -> None:
@@ -226,30 +160,6 @@ async def review(
     repo = (repo_url or "").strip() or (repo_path or "").strip()
     source = (source_type or "zip").lower()
 
-    # -------------------------
-    # ✅ Repo validation (inline)
-    # -------------------------
-    if source != "zip":
-        form_errors = _validate_repo_inputs(repo, branch)
-        if form_errors:
-            return render(
-                request,
-                "index.html",
-                {
-                    "error": "Please fix the highlighted fields.",
-                    "form_errors": form_errors,
-                    # preserve values
-                    "source_type": source_type,
-                    "repository_type": repository_type,
-                    "repo_url": repo_url,
-                    "repo_path": repo_path,
-                    "branch": branch,
-                    "project_name": project_name,
-                    "prepared_by": prepared_by,
-                },
-                status_code=400,
-            )
-
     # Read bytes
     if source == "zip":
         if not project_zip:
@@ -258,16 +168,13 @@ async def review(
         zip_bytes = await project_zip.read()
         max_bytes = MAX_ZIP_MB_UPLOAD * 1024 * 1024
         if len(zip_bytes) > max_bytes:
-            return render(
-                request,
-                "index.html",
-                {"error": f"ZIP too large. Max allowed is {MAX_ZIP_MB_UPLOAD} MB."},
-                status_code=400,
-            )
+            return render(request, "index.html", {"error": f"ZIP too large. Max allowed is {MAX_ZIP_MB_UPLOAD} MB."}, status_code=400)
 
         display_name = project_zip.filename or project_name.strip() or "Project"
     else:
-        # repo already validated above
+        if not repo:
+            return render(request, "index.html", {"error": "Please enter a GitHub repo URL."}, status_code=400)
+
         zip_bytes = _download_github_zip(repo, branch)
         display_name = project_name.strip() or repo.rstrip("/").split("/")[-1]
 

@@ -6,23 +6,32 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body class="bg-slate-950 text-slate-100">
-  <header class="border-b border-slate-800 bg-slate-900 px-6 py-4">
-    <div class="max-w-7xl mx-auto flex justify-between">
-      <div class="font-semibold">AI Code Review</div>
-      <nav class="text-sm">
-        <a href="/" class="mr-4 hover:text-white">Home</a>
-        <a href="/ai-code-review/" class="hover:text-white">Code Review</a>
+<body class="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-slate-100 text-gray-900">
+  <!-- Header -->
+  <header class="bg-white/70 backdrop-blur border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-8 w-1 rounded-full bg-yellow-400"></div>
+        <div class="font-semibold text-lg">AI SDLC Suite</div>
+      </div>
+
+      <nav class="text-sm font-medium text-gray-600">
+        <a href="/" class="mr-6 hover:text-gray-900">Home</a>
+        <a href="/user-story/" class="mr-6 hover:text-gray-900">User Story</a>
+        <a href="/design-doc/" class="mr-6 hover:text-gray-900">Design Doc</a>
+        <a href="/ai-code-review/" class="hover:text-gray-900">AI Code Review</a>
       </nav>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-6 py-8">
+  <main class="max-w-7xl mx-auto px-6 py-10">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="border-t border-slate-800 text-center text-xs text-slate-400 py-4">
-    AI SDLC Suite
+  <footer class="border-t border-gray-200 bg-white/70 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-6 py-4 text-center text-xs text-gray-500">
+      © 2026 Automation Factory · AI SDLC Suite
+    </div>
   </footer>
 </body>
 </html>

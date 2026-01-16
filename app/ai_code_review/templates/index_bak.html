@@ -1,0 +1,170 @@
+{# ai-sdlc-suite/app/ai_code_review/templates/index.html #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-8">
+
+  <div>
+    <h1 class="text-4xl font-semibold text-white">AI Code Review</h1>
+    <p class="text-slate-300 mt-2">
+      Upload a project ZIP or provide a repository to generate findings, remediation, and checklist.
+    </p>
+  </div>
+
+  {% if error %}
+  <div class="rounded-2xl border border-red-800 bg-red-950/40 p-4 text-red-200">
+    <div class="font-semibold">Error</div>
+    <div class="text-sm mt-1">{{ error }}</div>
+  </div>
+  {% endif %}
+
+  <!-- ✅ IMPORTANT: multipart form so UploadFile works -->
+  <form method="post" action="/ai-code-review/review" enctype="multipart/form-data" class="space-y-8" id="reviewForm">
+    <!-- Source switch -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+      <div class="text-lg font-semibold text-white mb-1">Source</div>
+      <div class="text-slate-400 text-sm mb-4">Choose how you want to provide the code.</div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="rounded-xl border border-slate-800 bg-slate-950 p-4 cursor-pointer hover:bg-slate-900 transition">
+          <div class="flex items-start gap-3">
+            <input type="radio" name="source_type" value="zip" id="srcZip" checked />
+            <div>
+              <div class="font-semibold text-white">Project ZIP</div>
+              <div class="text-sm text-slate-400">Upload a zipped repo/folder</div>
+            </div>
+          </div>
+        </label>
+
+        <label class="rounded-xl border border-slate-800 bg-slate-950 p-4 cursor-pointer hover:bg-slate-900 transition">
+          <div class="flex items-start gap-3">
+            <input type="radio" name="source_type" value="repo" id="srcRepo" />
+            <div>
+              <div class="font-semibold text-white">Repository</div>
+              <div class="text-sm text-slate-400">Fetch from Git / Azure DevOps</div>
+            </div>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- ZIP section -->
+    <div id="zipSection" class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+      <div class="text-lg font-semibold text-white mb-4">Project ZIP</div>
+
+      <!-- ✅ IMPORTANT: name must match router: project_zip -->
+      <div class="flex items-center gap-4">
+        <input
+          type="file"
+          name="project_zip"
+          id="project_zip"
+          accept=".zip,application/zip"
+          class="block w-full text-sm text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-400"
+        />
+      </div>
+
+      <div class="text-xs text-slate-400 mt-2">
+        Tip: If you switch to Repository and back, your chosen ZIP will stay selected.
+      </div>
+    </div>
+
+    <!-- Repo section -->
+    <div id="repoSection" class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg hidden">
+      <div class="text-lg font-semibold text-white mb-4">Repository</div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm text-slate-300">Repository Type</label>
+          <select name="repository_type" class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-slate-200">
+            <option value="GIT" selected>GIT</option>
+            <option value="ADO">Azure DevOps</option>
+          </select>
+          <div class="text-xs text-slate-500 mt-1">Choose where the repo is hosted.</div>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="text-sm text-slate-300">Repo Path</label>
+          <!-- UI uses repo_path; router accepts repo_path + repo_url -->
+          <input
+            type="text"
+            name="repo_path"
+            placeholder="https://github.com/org/repo"
+            class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-slate-200"
+          />
+          <div class="text-xs text-slate-500 mt-1">Authentication happens in backend code.</div>
+        </div>
+
+        <div>
+          <label class="text-sm text-slate-300">Branch</label>
+          <input
+            type="text"
+            name="branch"
+            value="main"
+            class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-slate-200"
+          />
+          <div class="text-xs text-slate-500 mt-1">Must exist in the repo.</div>
+        </div>
+      </div>
+
+      <div class="mt-4 text-xs text-slate-500">
+        Note: If the repo path or branch is missing/invalid, the system will show an error.
+      </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm text-slate-300">Project Name</label>
+          <input
+            type="text"
+            name="project_name"
+            class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-slate-200"
+            placeholder="Optional"
+          />
+        </div>
+        <div>
+          <label class="text-sm text-slate-300">Prepared By</label>
+          <input
+            type="text"
+            name="prepared_by"
+            class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-slate-200"
+            placeholder="Your name"
+          />
+        </div>
+      </div>
+
+      <div class="mt-6">
+        <button
+          type="submit"
+          class="inline-flex items-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-400 transition"
+        >
+          Run Review
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Toggle sections WITHOUT resetting the form (reset would clear chosen file)
+  const zipRadio = document.getElementById("srcZip");
+  const repoRadio = document.getElementById("srcRepo");
+  const zipSection = document.getElementById("zipSection");
+  const repoSection = document.getElementById("repoSection");
+
+  function toggleSource() {
+    const isZip = zipRadio.checked;
+    zipSection.classList.toggle("hidden", !isZip);
+    repoSection.classList.toggle("hidden", isZip);
+
+    // Do NOT reset the form here — it clears the file input.
+    // Also do NOT disable the file input permanently; but we can disable it when repo is selected.
+    document.getElementById("project_zip").disabled = !isZip;
+  }
+
+  zipRadio.addEventListener("change", toggleSource);
+  repoRadio.addEventListener("change", toggleSource);
+  toggleSource();
+</script>
+{% endblock %}

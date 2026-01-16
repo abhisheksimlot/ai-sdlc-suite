@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  /* White/Green theme for THIS page only (keeps suite base.html unchanged) */
+  .tcg-shell {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .tcg-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 28px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.10);
+    border: 1px solid #d1fae5;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tcg-card:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    background: #10b981;
+  }
+
+  .tcg-title {
+    color: #065f46;
+  }
+
+  .tcg-subtitle {
+    color: #4b5563;
+  }
+
+  .tcg-section {
+    background: #f7fffb;
+    border: 1px solid #d1fae5;
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .tcg-label {
+    color: #065f46;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .tcg-help {
+    color: #6b7280;
+    font-size: 12px;
+    margin-top: 6px;
+  }
+
+  .tcg-input,
+  .tcg-textarea {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #ffffff;
+    color: #111827;
+    outline: none;
+  }
+
+  .tcg-textarea {
+    min-height: 220px;
+    resize: vertical;
+  }
+
+  .tcg-input:focus,
+  .tcg-textarea:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.18);
+  }
+
+  .tcg-file {
+    display: block;
+    width: 100%;
+    color: #111827;
+  }
+
+  .tcg-file::file-selector-button {
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-right: 12px;
+    background: #10b981;
+    color: #ffffff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .tcg-file::file-selector-button:hover {
+    background: #059669;
+  }
+
+  .tcg-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 18px;
+  }
+
+  .tcg-btn-primary {
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 18px;
+    background: #10b981;
+    color: #ffffff;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 10px 22px rgba(16,185,129,0.25);
+  }
+  .tcg-btn-primary:hover {
+    background: #059669;
+  }
+
+  .tcg-btn-secondary {
+    border-radius: 14px;
+    padding: 12px 18px;
+    background: #ffffff;
+    color: #065f46;
+    font-weight: 800;
+    border: 1px solid #a7f3d0;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tcg-btn-secondary:hover {
+    background: #ecfdf5;
+  }
+
+  .tcg-error {
+    margin-top: 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-weight: 600;
+  }
+</style>
+
+<div class="tcg-shell">
+  <div class="tcg-card">
+    <h2 class="text-3xl font-semibold tcg-title mb-2">Test Case Generation</h2>
+    <p class="tcg-subtitle mb-6">
+      Upload Jira stories/requirements and a design document (Word/PDF/Text). Add extra context below.
+      Generates SIT test cases (functional, positive/negative, edge cases, and Gherkin).
+    </p>
+
+    <form action="" method="post" enctype="multipart/form-data" class="space-y-5">
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="tcg-section">
+          <div class="tcg-label mb-2">Jira Stories / Requirements</div>
+          <input class="tcg-file" type="file" name="jira_file" />
+          <div class="tcg-help">Accepted: .docx, .pdf, .txt</div>
+        </div>
+
+        <div class="tcg-section">
+          <div class="tcg-label mb-2">Design Document</div>
+          <input class="tcg-file" type="file" name="design_file" />
+          <div class="tcg-help">Accepted: .docx, .pdf, .txt</div>
+        </div>
+      </div>
+
+      <div class="tcg-section">
+        <div class="tcg-label mb-2">Other Information (paste/type)</div>
+        <textarea
+          name="extra_info"
+          class="tcg-textarea"
+          placeholder="Environments, APIs, integration points, data rules, permissions, logging/audit, error handling..."
+        ></textarea>
+        <div class="tcg-help">
+          Tip: Include SIT constraints, integrations, error handling rules, and any critical business validations.
+        </div>
+      </div>
+
+      <div class="tcg-actions">
+        <button type="submit" class="tcg-btn-primary">
+          Generate SIT Test Cases
+        </button>
+
+        <a href="/" class="tcg-btn-secondary">
+          Back
+        </a>
+      </div>
+
+      {% if detail %}
+        <div class="tcg-error">{{ detail }}</div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  /* =========================
+     PAGE WIDTH & POSITIONING
+     ========================= */
+  .tcg-shell {
+    max-width: 96vw;
+    width: 96vw;
+    margin-left: auto;   /* SHIFT CARD TO LEFT */
+    margin-right: auto; /* prevent centering */
+  }
+
+  .tcg-card {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 26px;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.08);
+    border: 1px solid #d1fae5;
+  }
+
+  /* =========================
+     HEADER
+     ========================= */
+  .tcg-title {
+    color: #065f46;
+    font-weight: 700;
+  }
+
+  .tcg-sub {
+    color: #6b7280;
+    font-size: 14px;
+  }
+
+  /* =========================
+     TABLE
+     ========================= */
+  .tc-table-wrapper {
+    margin-top: 18px;
+    overflow-x: hidden; /* NO HORIZONTAL SCROLL */
+  }
+
+  table.tc-table {
+    width: 100%;
+    table-layout: fixed;      /* FORCE FIT TO SCREEN */
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .tc-table thead th {
+    background: #ecfdf5;
+    color: #065f46;
+    font-weight: 700;
+    text-align: left;
+    padding: 14px 10px;
+    border-bottom: 2px solid #10b981;
+    vertical-align: top;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .tc-table tbody td {
+    padding: 14px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+    color: #111827;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .tc-table tbody tr:hover {
+    background: #f0fdf4;
+  }
+
+  /* =========================
+     COLUMN WIDTHS (BALANCED)
+     ========================= */
+  .tc-table th:nth-child(1), .tc-table td:nth-child(1) { width: 70px; }
+  .tc-table th:nth-child(2), .tc-table td:nth-child(2) { width: 130px; }
+  .tc-table th:nth-child(3), .tc-table td:nth-child(3) { width: 90px; }
+  .tc-table th:nth-child(4), .tc-table td:nth-child(4) { width: 230px; }
+  .tc-table th:nth-child(5), .tc-table td:nth-child(5) { width: 110px; }
+  .tc-table th:nth-child(6), .tc-table td:nth-child(6) { width: 220px; }
+  .tc-table th:nth-child(7), .tc-table td:nth-child(7) { width: 220px; }
+  .tc-table th:nth-child(8), .tc-table td:nth-child(8) { width: 260px; }
+  .tc-table th:nth-child(9), .tc-table td:nth-child(9) { width: 260px; }
+  .tc-table th:nth-child(10), .tc-table td:nth-child(10) { width: 180px; }
+
+  /* =========================
+     BADGES
+     ========================= */
+  .tc-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .tc-priority-high { background: #fee2e2; color: #991b1b; }
+  .tc-priority-medium { background: #fef3c7; color: #92400e; }
+  .tc-priority-low { background: #dcfce7; color: #166534; }
+
+  /* =========================
+     LISTS
+     ========================= */
+  .tc-list {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .tc-list li {
+    margin-bottom: 6px;
+  }
+
+  /* =========================
+     BUTTONS
+     ========================= */
+  .tc-btn {
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-weight: 700;
+    color: #ffffff;
+    background: #10b981;
+    text-decoration: none;
+  }
+
+  .tc-btn:hover {
+    background: #059669;
+  }
+</style>
+
+<div class="tcg-shell">
+  <div class="tcg-card">
+
+    <!-- HEADER -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+      <div>
+        <h2 class="text-3xl tcg-title">SIT Test Cases</h2>
+        <div class="tcg-sub">Job ID: {{ job_id }}</div>
+      </div>
+
+      <div class="flex gap-3">
+        <a href="./{{ job_id }}/xlsx" class="tc-btn">Download Excel</a>
+        <a href="./{{ job_id }}/pdf" class="tc-btn">Download PDF</a>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="tc-table-wrapper">
+      <table class="tc-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Title</th>
+            <th>Story Refs</th>
+            <th>Preconditions</th>
+            <th>Test Data</th>
+            <th>Steps</th>
+            <th>Expected Results</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for tc in test_cases %}
+          <tr>
+            <td><strong>{{ tc.id }}</strong></td>
+
+            <td><span class="tc-badge">{{ tc.category }}</span></td>
+
+            <td>
+              <span class="tc-badge
+                {% if tc.priority == 'High' %}tc-priority-high
+                {% elif tc.priority == 'Medium' %}tc-priority-medium
+                {% else %}tc-priority-low{% endif %}">
+                {{ tc.priority }}
+              </span>
+            </td>
+
+            <td><strong>{{ tc.title }}</strong></td>
+
+            <td>{{ (tc.story_refs or []) | join(", ") or "-" }}</td>
+
+            <td>
+              {% if tc.preconditions %}
+              <ul class="tc-list">
+                {% for x in tc.preconditions %}<li>{{ x }}</li>{% endfor %}
+              </ul>
+              {% else %}-{% endif %}
+            </td>
+
+            <td>
+              {% if tc.test_data %}
+              <ul class="tc-list">
+                {% for x in tc.test_data %}<li>{{ x }}</li>{% endfor %}
+              </ul>
+              {% else %}-{% endif %}
+            </td>
+
+            <td>
+              {% if tc.steps %}
+              <ol class="tc-list">
+                {% for x in tc.steps %}<li>{{ x }}</li>{% endfor %}
+              </ol>
+              {% else %}-{% endif %}
+            </td>
+
+            <td>
+              {% if tc.expected_results %}
+              <ul class="tc-list">
+                {% for x in tc.expected_results %}<li>{{ x }}</li>{% endfor %}
+              </ul>
+              {% else %}-{% endif %}
+            </td>
+
+            <td>
+              {% if tc.notes %}
+              <ul class="tc-list">
+                {% for x in tc.notes %}<li>{{ x }}</li>{% endfor %}
+              </ul>
+              {% else %}-{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-6">
+      <a href="./" class="tcg-sub font-semibold text-emerald-700 hover:underline">
+        ← Generate another test case set
+      </a>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

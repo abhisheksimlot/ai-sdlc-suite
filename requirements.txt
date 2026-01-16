@@ -9,3 +9,6 @@ fastapi
 pydantic
 ruff
 reportlab
+openpyxl
+PyPDF2
+python-docx
