@@ -12,7 +12,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 # ReportLab (PDF tables)
 from reportlab.lib import colors
@@ -51,52 +51,6 @@ llm_reviewer = LLMFallbackReviewer()
 REPORT_CACHE: Dict[str, Dict[str, Any]] = {}
 REPORT_TTL_SECONDS = 30 * 60
 MAX_ZIP_MB_UPLOAD = int(os.getenv("MAX_ZIP_MB_UPLOAD", "500"))
-
-# -----------------------------
-# ✅ Session "memory" helpers
-# -----------------------------
-SESSION_COOKIE = "pp_review_sid"
-
-
-def _get_or_create_sid(request: Request) -> str:
-    sid = request.cookies.get(SESSION_COOKIE)
-    if not sid:
-        sid = uuid.uuid4().hex
-    return sid
-
-
-def _set_sid_cookie(resp: HTMLResponse | JSONResponse, sid: str) -> None:
-    resp.set_cookie(
-        key=SESSION_COOKIE,
-        value=sid,
-        httponly=True,
-        samesite="lax",
-    )
-
-
-def _clear_cache_for_sid(sid: str) -> None:
-    """
-    Clear cached reports for THIS user/session only.
-    """
-    for rid in list(REPORT_CACHE.keys()):
-        if REPORT_CACHE.get(rid, {}).get("sid") == sid:
-            REPORT_CACHE.pop(rid, None)
-
-
-def _get_last_source_for_sid(sid: str) -> Optional[str]:
-    # Return last used source stored in any cached report for this sid
-    # (works even if user refreshed page)
-    latest_t = -1.0
-    latest_source = None
-    for item in REPORT_CACHE.values():
-        if item.get("sid") != sid:
-            continue
-        t = float(item.get("created", 0) or 0)
-        if t > latest_t:
-            latest_t = t
-            latest_source = item.get("debug", {}).get("source")  # "zip" or "repo"
-    return latest_source
-
 
 # -----------------------------
 # Repo/Branch validation helpers
@@ -251,21 +205,7 @@ def _make_checklist(issues: List[Issue]) -> List[Dict[str, str]]:
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request):
     _cleanup_cache()
-    sid = _get_or_create_sid(request)
-    resp = render(request, "index.html", {})
-    _set_sid_cookie(resp, sid)
-    return resp
-
-
-# ✅ NEW: Reset endpoint to clear "memory" when switching Zip/Git
-@router.post("/reset")
-def reset_state(request: Request):
-    _cleanup_cache()
-    sid = _get_or_create_sid(request)
-    _clear_cache_for_sid(sid)
-    resp = JSONResponse({"ok": True})
-    _set_sid_cookie(resp, sid)
-    return resp
+    return render(request, "index.html", {})
 
 
 @router.post("/review", response_class=HTMLResponse)
@@ -281,17 +221,10 @@ async def review(
     repository_type: str = Form("GIT"),
 ):
     _cleanup_cache()
-    sid = _get_or_create_sid(request)
 
     # support both repo_url and repo_path (your UI uses repo_path)
     repo = (repo_url or "").strip() or (repo_path or "").strip()
     source = (source_type or "zip").lower()
-
-    # ✅ If user switched source compared to their last cached run, clear their cache
-    last_source = _get_last_source_for_sid(sid)  # "zip" or "repo" or None
-    current_source = "zip" if source == "zip" else "repo"
-    if last_source and last_source != current_source:
-        _clear_cache_for_sid(sid)
 
     # -------------------------
     # ✅ Repo validation (inline)
@@ -299,7 +232,7 @@ async def review(
     if source != "zip":
         form_errors = _validate_repo_inputs(repo, branch)
         if form_errors:
-            resp = render(
+            return render(
                 request,
                 "index.html",
                 {
@@ -316,27 +249,21 @@ async def review(
                 },
                 status_code=400,
             )
-            _set_sid_cookie(resp, sid)
-            return resp
 
     # Read bytes
     if source == "zip":
         if not project_zip:
-            resp = render(request, "index.html", {"error": "Please upload a ZIP file."}, status_code=400)
-            _set_sid_cookie(resp, sid)
-            return resp
+            return render(request, "index.html", {"error": "Please upload a ZIP file."}, status_code=400)
 
         zip_bytes = await project_zip.read()
         max_bytes = MAX_ZIP_MB_UPLOAD * 1024 * 1024
         if len(zip_bytes) > max_bytes:
-            resp = render(
+            return render(
                 request,
                 "index.html",
                 {"error": f"ZIP too large. Max allowed is {MAX_ZIP_MB_UPLOAD} MB."},
                 status_code=400,
             )
-            _set_sid_cookie(resp, sid)
-            return resp
 
         display_name = project_zip.filename or project_name.strip() or "Project"
     else:
@@ -398,7 +325,6 @@ async def review(
     }
 
     REPORT_CACHE[report_id] = {
-        "sid": sid,  # ✅ tag cache entry to this session
         "created": time.time(),
         "issues_ui": issues_ui,
         "checklist": checklist,
@@ -414,7 +340,7 @@ async def review(
         "summary": rr.summary,
     }
 
-    resp = render(
+    return render(
         request,
         "report.html",
         {
@@ -429,22 +355,14 @@ async def review(
             "result": rr,
         },
     )
-    _set_sid_cookie(resp, sid)
-    return resp
 
 
 # ✅ PDF TABLE ENDPOINT (works at /ai-code-review/report/{id}/pdf once router is mounted with prefix)
 @router.get("/report/{report_id}/pdf")
-def report_pdf(request: Request, report_id: str):
+def report_pdf(report_id: str):
     _cleanup_cache()
-    sid = _get_or_create_sid(request)
-
     item = REPORT_CACHE.get(report_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Report not found or expired.")
-
-    # ✅ Prevent accessing other session’s reports
-    if item.get("sid") != sid:
         raise HTTPException(status_code=404, detail="Report not found or expired.")
 
     issues = item.get("issues_ui", []) or []
@@ -571,14 +489,11 @@ def report_pdf(request: Request, report_id: str):
     buf.seek(0)
 
     filename = f"code_review_{report_id}.pdf"
-    resp = StreamingResponse(
+    return StreamingResponse(
         buf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-    # Keep cookie alive
-    _set_sid_cookie(resp, sid)
-    return resp
 
 
 __all__ = ["router"]
