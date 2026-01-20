@@ -278,14 +278,35 @@ if "Missing" in getattr(test_case_app, "title", ""):
     )
 
 
+
 # ------------------------------------------------------------
-# Mount apps
+# Mount sub-apps (UI apps)
 # ------------------------------------------------------------
 suite.mount("/user-story", user_story_app)
 suite.mount("/design-doc", design_doc_app)
 suite.mount("/ai-code-review", ai_code_review_app)
+suite.mount("/test-cases", test_case_app)
+from app.pp_copilot_prompt.app import pp_copilot_app
+from app.pp_copilot_prompt.router import router as pp_copilot_router
+
+
+# ------------------------------------------------------------
+# Include API routers (services, NOT apps)
+# ------------------------------------------------------------
+
+suite.include_router(pp_copilot_router)
+suite.mount("/pp-copilot-ui", pp_copilot_app)
+
+# ------------------------------------------------------------
+# Final ASGI app
+# ------------------------------------------------------------
+app = suite
 
 # ✅ NEW mount
 suite.mount("/test-cases", test_case_app)
+
+from app.pp_copilot_prompt.router import router as pp_copilot_router
+app.include_router(pp_copilot_router)
+
 
 app = suite

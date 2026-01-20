@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="relative bg-slate-50 rounded-3xl shadow-xl overflow-hidden">
+
+  <!-- Left accent bar (VIOLET) -->
+  <div class="absolute left-0 top-0 h-full w-2 bg-violet-600"></div>
+
+  <div class="p-10">
+
+    <!-- Header -->
+    <h1 class="text-4xl font-bold text-slate-900 mb-2">
+      Power Platform Copilot Prompt Generator
+    </h1>
+    <p class="text-slate-600 mb-10 max-w-3xl">
+      Upload a Design Document and JIRA user stories to generate a
+      <strong>Copilot “Make a plan” prompt</strong> that can automatically
+      build a complete Power Platform solution.
+    </p>
+
+    <!-- Configuration -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-8">
+      <h2 class="text-xl font-semibold text-slate-800 mb-4">
+        Solution Configuration
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">
+            Solution Name
+          </label>
+          <input id="solutionName"
+                 type="text"
+                 value="MSPP Auto-Generated Solution"
+                 class="w-full rounded-xl border border-slate-300 px-4 py-2
+              text-slate-900 placeholder-slate-400 bg-white
+              focus:ring-2 focus:ring-violet-500 focus:outline-none"  />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-1">
+            Publisher Prefix
+          </label>
+          <input id="publisherPrefix"
+                 type="text"
+                 value="Intact"
+                 class="w-full rounded-xl border border-slate-300 px-4 py-2
+              text-slate-900 placeholder-slate-400 bg-white
+              focus:ring-2 focus:ring-violet-500 focus:outline-none"/>
+        </div>
+
+        <div class="flex items-end">
+          <button id="generateBtn"
+                  onclick="generatePrompt()"
+                  class="w-full rounded-xl bg-violet-600 text-white font-semibold py-3 hover:bg-violet-700 transition">
+            Generate Prompt
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inputs -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-8">
+      <h2 class="text-xl font-semibold text-slate-800 mb-4">
+        Inputs
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-2">
+            Design Document
+          </label>
+          <input id="designDoc"
+                 type="file"
+                 class="w-full rounded-xl border border-slate-300 px-4 py-2
+              text-slate-900 placeholder-slate-400 bg-white
+              focus:ring-2 focus:ring-violet-500 focus:outline-none""/>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-600 mb-2">
+            JIRA User Stories
+          </label>
+          <input id="jiraDoc"
+                 type="file"
+                 class="w-full rounded-xl border border-slate-300 px-4 py-2
+              text-slate-900 placeholder-slate-400 bg-white
+              focus:ring-2 focus:ring-violet-500 focus:outline-none"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Output -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-slate-800">
+          Generated Copilot Prompt
+        </h2>
+
+        <button onclick="copyPrompt()"
+                class="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-800 transition">
+          Copy
+        </button>
+      </div>
+
+      <textarea id="output"
+                placeholder="The Copilot “Make a plan” prompt will appear here..."
+                class="w-full min-h-[360px] rounded-xl border border-violet-300 p-4
+                 font-mono text-sm leading-relaxed
+                 text-slate-900 placeholder-slate-400
+                 bg-white
+                 focus:ring-2 focus:ring-violet-500 focus:outline-none
+                 resize-vertical"></textarea>
+
+      <p class="text-sm text-slate-500 mt-3">
+        Paste this prompt directly into <strong>Power Platform → Copilot → “Let’s make a plan”</strong>.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+async function generatePrompt() {
+  const btn = document.getElementById("generateBtn");
+  btn.disabled = true;
+  btn.innerText = "Generating...";
+
+  const design = document.getElementById("designDoc").files[0];
+  const jira = document.getElementById("jiraDoc").files[0];
+
+  if (!design || !jira) {
+    alert("Please upload both the Design Document and JIRA stories.");
+    btn.disabled = false;
+    btn.innerText = "Generate Prompt";
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append("design_doc", design);
+  fd.append("jira_stories", jira);
+  fd.append("solution_name", document.getElementById("solutionName").value);
+  fd.append("publisher_prefix", document.getElementById("publisherPrefix").value);
+
+  try {
+    const res = await fetch("/pp-copilot/generate", {
+      method: "POST",
+      body: fd
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to generate prompt.");
+      return;
+    }
+
+    document.getElementById("output").value = data.prompt || "";
+  } catch (e) {
+    alert("Error generating prompt.");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Generate Prompt";
+  }
+}
+
+function copyPrompt() {
+  const ta = document.getElementById("output");
+  ta.select();
+  document.execCommand("copy");
+}
+</script>
+{% endblock %}
